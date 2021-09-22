@@ -384,7 +384,7 @@ dist
 .yarn/install-state.gz
 .pnp.*
 
-### OSX ###
+### MacOS ###
 # General
 .DS_Store
 .AppleDouble
