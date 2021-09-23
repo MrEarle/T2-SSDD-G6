@@ -5,11 +5,15 @@ from copy import deepcopy
 from typing import Callable, List
 
 MESSAGE = "message"
-TIMESTAMP = "timestamp"
-VECTORS = "vectors"
+MESSAGE_COUNT = "message_count"
+SENDER_ID = "sender_id"
 
 
 def create_with_vector_locks(lock_names: List[str]):
+    """
+    Decorator that acquires locks with the specified names.
+    Used in VectorClock class.
+    """
     lock_names.sort()
 
     def with_vector_locks(func):
@@ -27,188 +31,105 @@ def create_with_vector_locks(lock_names: List[str]):
 
 
 class VectorClock:
+    """
+    Mantains logic clocks for all other processes. Executes logic for
+    message synchronization on a process independent basis. This means
+    that messages from a specific client will have their sending
+    order preserved, but there is no such guarantee for messages of
+    different clients
+    """
+
     def __init__(self, idx: str, onDeliverMessage: Callable[[dict], None]) -> None:
         self.idx = idx
-        # { destination_id: vector_timestamp }
-        self.v_p = {}
+        # { destination_id: message_count }
+        self.sent_messages = defaultdict(lambda: 0)
 
-        # Logical time of sending message m
-        self.t_m = {self.idx: 0}
+        # { sender_id: message_count }
+        self.received_messages = defaultdict(lambda: 0)
 
-        # Delayed message queue
-        self.delayed_queue = []
+        # Delayed messages
+        self.delayed_messages = []
 
         # Locks
-        self.lock_names = ["v_lock", "t_lock", "d_lock"]
-        self.locks = {x: Lock() for x in self.lock_names}
+        lock_names = ["sent_messages", "received_messages", "delayed_messages"]
+        self.locks = {x: Lock() for x in lock_names}
 
         # Callback when message is delivered
         self.onDeliverMessage = onDeliverMessage
 
-    @create_with_vector_locks(["t_lock", "v_lock"])
-    def send_message(self, message_text: str, dest_idx: str):
+    @create_with_vector_locks(["sent_messages"])
+    def send_message(self, message_txt: str, dest_id: str):
         """
-        Public method for when a message is being sent. Executes vector clock logic:
-
-        P_i sends a message to P_j
-
-        Parameters:
-        message_text: Message string to send
-        dest_idx: Destination id
-
-        Returns:
-        dict: Dictionary containing message text and clock related values
+        Public method to send a message. Will execute logic clock algorithm.
         """
-        # P_i sends message m, timestamped t_m, and V_i to process P_j
-        self.t_m[self.idx] += 1
+        # Increase count of messages sent to the destination
+        self.sent_messages[dest_id] += 1
+
         message = {
-            MESSAGE: message_text,
-            TIMESTAMP: dict(self.t_m),
-            VECTORS: dict(deepcopy(self.v_p)),
+            MESSAGE: message_txt,
+            # Include count of messages sent to the destination in message
+            MESSAGE_COUNT: self.sent_messages[dest_id],
+            SENDER_ID: self.idx,
         }
-
-        # P_i sets V_i[j] = t_m
-        self.v_p[dest_idx] = self.t_m
 
         return message
 
-    @create_with_vector_locks(["t_lock", "v_lock"])
-    def __should_delay_message(self, message: dict) -> bool:
-        """
-        When Pj, j ≠ i, receives m, it delays the message’s delivery if both:
-            - V_m[j] is set; and
-            - V_m[j] < t_j
-
-        Parameters:
-        message (dict): Dictionary of the received message. Contains the senders
-        timestamp and vector clock.
-
-        Returns:
-        bool: Wether the message should be delayed
-        """
-        vectors = message[VECTORS]
-
-        # V_m[j] is set
-        if self.idx not in vectors:
-            # No se cumple la primera condicion
-            return False
-
-        idxs = set(self.v_p.keys())
-        idxs.update(set(vectors[self.idx].keys()))
-
-        # v_m[j] < t_j
-        any_less = False
-        for idx in idxs:
-            if idx not in vectors[self.idx]:
-                # El valor en v_m[j] es menor o igual al valor en t_j
-                continue
-
-            vm_jk = vectors[self.idx].get(idx, 0)
-            tj_k = self.t_m.get(idx, 0)
-
-            if vm_jk < tj_k:
-                # Hay al menos un valor en v_m[j] menor al valor en t_j
-                any_less = True
-
-            if not (vm_jk > tj_k):
-                # Hay un valor en v_m[j] mayor al valor en t_j
-                # Entonces no se cumple la segunda condicion
-                return False
-
-        # Ver si se cumple la segunda condicion
-        return any_less
-
-    @create_with_vector_locks(["t_lock"])
-    def update_vector_clock(self, timestamp: dict):
-        """
-        Update Pj's vector clock.
-
-        Parameters:
-        timestamp (dict): Dictionary containing the timestamp of the
-        senders vector clock. Should be included in the received message.
-        """
-        idxs = set(self.t_m.keys())
-        idxs.update(timestamp.keys())
-
-        for idx in idxs:
-            if idx in timestamp:
-                self.t_m[idx] = max(self.t_m.get(idx, 0), timestamp[idx])
-
-    @create_with_vector_locks(["v_lock"])
-    def __deliver_message(self, message: dict):
-        """
-        When the message is delivered to Pj, update all set elements of Vj
-        with the corresponding elements of Vm, except for Vj[j]
-
-        Parameters:
-        message (dict): Dictionary of the received message. Contains the senders
-        timestamp and vector clock.
-
-        """
-        vectors = message[VECTORS]
-        for idx in vectors:
-            if idx == self.idx:
-                continue
-
-            if idx not in self.v_p:
-                # If Vj[k] is uninitialized and Vm[k] is initialized, set Vj[k] = Vm[k].
-                self.v_p[idx] = vectors[idx]
-            else:
-                #  If both Vj[k] and Vm[k] are initialized, set Vj[k][k′] = max(Vj[k][k′], Vm[k][k′]) for all k′ = 1, …, n
-                inner_idxs = set(self.v_p.keys())
-                inner_idxs.update(vectors.keys())
-                for inner_idx in inner_idxs:
-                    if inner_idx in vectors:
-                        self.v_p[idx][inner_idx] = max(
-                            self.v_p[idx][inner_idx], vectors[idx][inner_idx]
-                        )
-
-        self.update_vector_clock(timestamp=message[TIMESTAMP])
-
-        # Message delivery callback
-        self.onDeliverMessage(message)
-
-    @create_with_vector_locks(["d_lock"])
-    def __receive_message(self, message: dict):
-        """
-        Private function to receive a message. Executes vector clock logic.
-
-        Parameters:
-        message (dict): Dictionary of the received message. Contains the senders
-        timestamp and vector clock.
-        """
-        if self.__should_delay_message(message):
-            self.delayed_queue.append(message)
-        else:
-            self.__deliver_message(message)
-
     def receive_message(self, message: dict):
         """
-        Public function to receive a message. Executes vector clock logic
-        and checks for delayed messages
-
-        Parameters:
-        message (dict): Dictionary of the received message. Contains the senders
-        timestamp and vector clock.
+        Public method to receive a message. Will execute logic clock algorithm,
+        delaying the delivery of a message if previous messages are missing.
         """
-        self.__receive_message(message)
-        self.__check_delayed_messages()
-
-    def __check_delayed_messages(self):
-        """Check buffered messages to see if any can be delivered"""
-        self.locks["d_lock"].acquire()
-        for i in range(len(self.delayed_queue)):
-            if self.__should_delay_message(self.delayed_queue[i]):
-                continue
-
-            message = self.delayed_queue.pop(i)
+        if self.__should_delay_message(message):
+            self.delayed_messages.append(message)
+        else:
             self.__deliver_message(message)
-            self.locks["d_lock"].release()
-
             self.__check_delayed_messages()
-            return
 
-        self.locks["d_lock"].release()
+    @create_with_vector_locks(["received_messages"])
+    def __should_delay_message(self, message: dict) -> bool:
+        """
+        Checks if a message should be delayed. This should happen if a
+        previous message hasn't been received yet.
+        """
+        sender_id = message[SENDER_ID]
+        message_count = message[MESSAGE_COUNT]
+
+        # If the amount of messages sent by the sender to this client
+        # exceeds the messages received from him by more than 1,
+        # this means that there are still undelivered messages that
+        # predate this one.
+        return message_count - 1 > self.received_messages[sender_id]
+
+    @create_with_vector_locks(["received_messages"])
+    def __deliver_message(self, message: dict):
+        """
+        Executes the delivery of a message via the onDeliverMessage callback.
+        Also updates the received message count from the sender.
+        """
+        sender_id = message[SENDER_ID]
+        self.received_messages[sender_id] = max(
+            message[MESSAGE_COUNT], self.received_messages[sender_id] + 1
+        )
+        self.onDeliverMessage(message)
+
+    @create_with_vector_locks(["delayed_messages"])
+    def __check_delayed_messages(self):
+        """
+        Checks if a delayed message should now be delivered. Does this
+        untill no more messages can be delivered.
+        """
+        message_delivered = True
+
+        while message_delivered:
+            message_delivered = False
+            for i, message in enumerate(self.delayed_messages):
+                if self.__should_delay_message(message):
+                    continue
+
+                self.delayed_messages.pop(i)
+                self.__deliver_message(message)
+                message_delivered = True
+                break
 
 
 if __name__ == "__main__":
@@ -226,4 +147,20 @@ if __name__ == "__main__":
 
     clock_a.receive_message(m3)
     clock_a.receive_message(m2)
+    clock_a.receive_message(m1)
+
+    m1 = clock_b.send_message("b4", "c")
+    m2 = clock_b.send_message("b5", "c")
+    m3 = clock_b.send_message("b6", "c")
+
+    clock_c.receive_message(m3)
+    clock_c.receive_message(m2)
+    clock_c.receive_message(m1)
+
+    m1 = clock_b.send_message("b7", "a")
+    m2 = clock_b.send_message("b8", "c")
+    m3 = clock_b.send_message("b9", "a")
+
+    clock_a.receive_message(m3)
+    clock_c.receive_message(m2)
     clock_a.receive_message(m1)
