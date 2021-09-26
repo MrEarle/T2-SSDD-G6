@@ -1,4 +1,5 @@
 import logging
+
 from src.utils.vectorClock import MESSAGE, SENDER_ID, VectorClock
 from typing import TypedDict
 
@@ -56,7 +57,7 @@ class Server:
             {"message": f'\u2713 {auth["username"]} has connected to the server'},
         )
 
-        self.server.emit("send_sid", sid, room=sid)
+        self.server.emit("send_uuid", user.uuid, room=sid)
 
         # Si se supero el limite inferior de usuarios conectados, mandar la historia
         if len(self.users) >= self.min_user_count:
@@ -91,31 +92,28 @@ class Server:
             )
 
         # Eliminar al usuario del registro
-        self.users.del_user(sid)
+        self.users.del_user(client.uuid)
 
     def on_chat(self, sid, data):
         """Maneja el broadcast de los chats"""
         # Obtener el cliente que mando el mensaje
-        logger.debug("MESSAGE!!")
-        client = self.users.get_user_by_sid(sid)
-        logger.debug(f"Message from {client.name} received: {data}")
-
         self.clock.receive_message(data)
         return True
 
     def __on_deliver_message(self, message: dict):
-        sid: str = message[SENDER_ID]
-        client = self.users.get_user_by_sid(sid)
+        uuid: str = message[SENDER_ID]
+        logger.debug(f"Delivering message {message}")
+        client = self.users.get_user_by_uuid(uuid)
 
         # Agregar mensaje al registro
         self.messages.append({"username": client.name, "message": message[MESSAGE]})
 
         # Enviar mensaje solo si se supero el limite inferior
         if client and (len(self.users) >= self.min_user_count or self.history_sent):
-            for dest_sid in self.users.users:
+            for dest_uuid, user in self.users.users.items():
                 try:
-                    msg = self.clock.send_message(message[MESSAGE], dest_sid)
+                    msg = self.clock.send_message(message[MESSAGE], dest_uuid)
                     msg["username"] = client.name
-                    self.server.emit("chat", msg, to=dest_sid)
+                    self.server.emit("chat", msg, to=user.sid)
                 except Exception as e:
                     logger.error(e)

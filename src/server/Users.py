@@ -25,9 +25,9 @@ class UserList:
         if not username or self.get_user_by_name(username):
             logger.debug(f"Username with name {username} already exists")
             return None
-        uuid = uuid4()
+        uuid = str(uuid4())
         user = User(username, uuid, uri, sid)
-        self.users[sid] = user
+        self.users[uuid] = user
         return user
 
     """
@@ -35,9 +35,9 @@ class UserList:
         sid: SID for the user
     """
 
-    def get_user_by_sid(self, sid: str) -> Union[User, None]:
-        if sid in self.users:
-            return self.users[sid]
+    def get_user_by_uuid(self, uuid: str) -> Union[User, None]:
+        if uuid in self.users:
+            return self.users[uuid]
         return None
 
     """
@@ -51,9 +51,9 @@ class UserList:
                 return value
         return None
 
-    def get_user_by_uuid(self, uuid: str) -> Union[User, None]:
+    def get_user_by_sid(self, sid: str) -> Union[User, None]:
         for _, value in self.users.items():
-            if value.uuid == uuid:
+            if value.sid == sid:
                 return value
         return None
 
