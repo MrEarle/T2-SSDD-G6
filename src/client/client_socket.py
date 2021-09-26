@@ -1,3 +1,4 @@
+from src.utils.vectorClock import VectorClock
 from .gui_socketio import GUI
 from collections import deque
 
@@ -22,6 +23,8 @@ class ClientSockets:
         self.__outbound = deque()
         self.__sendNext = False
 
+        self.clock = None
+
     def initialize(self):
         # Initialize connection to server
         self.initialize_server_connection()
@@ -37,15 +40,14 @@ class ClientSockets:
 
     def initialize_server_connection(self):
         # Initialize connection to server
-        self.server_io = socketio.Client(
-            logger=True,
-        )
+        self.server_io = socketio.Client()
 
         # Register event handlers
         self.server_io.on("connect", self.connect)
+        self.server_io.on("send_sid", self.receive_sid)
         self.server_io.on("server_message", self.server_message)
         self.server_io.on("chat", self.chat_message)
-        self.server_io.on("chat_message_history", self.chat_message_history)
+        self.server_io.on("message_history", self.chat_message_history)
 
     def connect(self):
         logger.debug("Initializing chat GUI")
@@ -55,6 +57,9 @@ class ClientSockets:
         logger.debug("Starting message delivery queue")
         self.server_io.start_background_task(self.__run)
 
+    def receive_sid(self, sid):
+        self.clock = VectorClock(sid, self.__on_deliver_message)
+
     def server_message(self, data):
         # Cuando llega un mensaje del server, agregarlo en la gui
         self.gui.addMessage(data["message"])
@@ -63,7 +68,10 @@ class ClientSockets:
         # Cuando llega un mensaje de un usuario, formatearlo
         # y agregarlo en la gui
         logger.debug(f"Chat received {data}")
-        self.gui.addMessage(f"<{data['username']}> {data['message']}")
+        self.clock.receive_message(data)
+
+    def __on_deliver_message(self, message: dict):
+        self.gui.addMessage(f"<{message['username']}> {message['message']}")
 
     def chat_message_history(self, data):
         # Si llega  la historia de mensaje, formatearlos y agregarlos
@@ -116,6 +124,7 @@ class ClientSockets:
         # See __run for message sending.
         # message = self.clock.send_message(message, "server")
         logger.debug(f"Sending message")
+        message = self.clock.send_message(message, "server")
         self.__outbound.append(message)
 
     # def __send_private_message(self, addr, username, message, dest_user):

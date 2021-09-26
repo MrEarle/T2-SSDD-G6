@@ -1,4 +1,5 @@
 import logging
+from src.utils.vectorClock import MESSAGE, SENDER_ID, VectorClock
 from typing import TypedDict
 
 from colorama import Fore as Color
@@ -13,7 +14,7 @@ authType = TypedDict("Auth", {"username": str, "publicUri": str})
 
 class Server:
     def __init__(self, min_user_count: int = 0) -> None:
-        self.server = socketio.Server(logger=True, cors_allowed_origins="*")
+        self.server = socketio.Server(cors_allowed_origins="*")
         self.app = Flask(__name__)
         self.app.wsgi_app = socketio.WSGIApp(self.server, self.app.wsgi_app)
 
@@ -23,6 +24,8 @@ class Server:
         self.messages = []
 
         self.setup_handlers()
+
+        self.clock = VectorClock("server", self.__on_deliver_message)
 
     def setup_handlers(self):
         self.server.on("connect", self.on_connect)
@@ -52,6 +55,8 @@ class Server:
             "server_message",
             {"message": f'\u2713 {auth["username"]} has connected to the server'},
         )
+
+        self.server.emit("send_sid", sid, room=sid)
 
         # Si se supero el limite inferior de usuarios conectados, mandar la historia
         if len(self.users) >= self.min_user_count:
@@ -94,13 +99,23 @@ class Server:
         logger.debug("MESSAGE!!")
         client = self.users.get_user_by_sid(sid)
         logger.debug(f"Message from {client.name} received: {data}")
-        message = {"username": client.name, "message": data}
+
+        self.clock.receive_message(data)
+        return True
+
+    def __on_deliver_message(self, message: dict):
+        sid: str = message[SENDER_ID]
+        client = self.users.get_user_by_sid(sid)
 
         # Agregar mensaje al registro
-        self.messages.append(message)
+        self.messages.append({"username": client.name, "message": message[MESSAGE]})
 
         # Enviar mensaje solo si se supero el limite inferior
         if client and (len(self.users) >= self.min_user_count or self.history_sent):
-            self.server.emit("chat", message)
-
-        return True
+            for dest_sid in self.users.users:
+                try:
+                    msg = self.clock.send_message(message[MESSAGE], dest_sid)
+                    msg["username"] = client.name
+                    self.server.emit("chat", msg, to=dest_sid)
+                except Exception as e:
+                    logger.error(e)
