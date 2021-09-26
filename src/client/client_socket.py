@@ -1,11 +1,13 @@
-from src.utils.vectorClock import VectorClock
-from .gui_socketio import GUI
+import logging
 from collections import deque
 
 import socketio
-import logging
 from colorama import Fore as Color
 
+from src.client.p2p import P2P
+from src.utils.vectorClock import VectorClock
+
+from .gui_socketio import GUI
 
 logger = logging.getLogger(f"{Color.RED}[ClientSockets]{Color.RESET}")
 
@@ -16,7 +18,7 @@ class ClientSockets:
         self.gui = GUI(
             self.server_connect, self.send_private_message, self.send_message
         )
-        # self.p2p = P2P()
+        self.p2p = P2P()
 
         # Queue for outbound messages.
         # Should only send a message if the previous one was received by the server.
@@ -30,10 +32,10 @@ class ClientSockets:
         self.initialize_server_connection()
 
         # Initialize local server for p2p connections
-        # self.p2p.initialize_server(self.gui)
+        self.p2p.initialize_p2p_server(self.gui)
 
         # Get public url and port for p2p connection
-        # self.public_url, self.port = self.p2p.start()
+        self.port = self.p2p.start()
 
         # Deploy the chat GUI
         self.gui.initialize()
@@ -44,7 +46,7 @@ class ClientSockets:
 
         # Register event handlers
         self.server_io.on("connect", self.connect)
-        self.server_io.on("send_sid", self.receive_sid)
+        self.server_io.on("send_uuid", self.receive_uuid)
         self.server_io.on("server_message", self.server_message)
         self.server_io.on("chat", self.chat_message)
         self.server_io.on("message_history", self.chat_message_history)
@@ -57,8 +59,9 @@ class ClientSockets:
         logger.debug("Starting message delivery queue")
         self.server_io.start_background_task(self.__run)
 
-    def receive_sid(self, sid):
-        self.clock = VectorClock(sid, self.__on_deliver_message)
+    def receive_uuid(self, uuid: str):
+        self.clock = VectorClock(uuid, self.__on_deliver_message)
+        self.p2p.clock = self.clock
 
     def server_message(self, data):
         # Cuando llega un mensaje del server, agregarlo en la gui
@@ -116,7 +119,10 @@ class ClientSockets:
         logger.debug(f"Connecting to server {self.server_uri}")
         self.server_io.connect(
             self.server_uri,
-            auth={"username": name, "publicUri": ""},  # TODO: Public URI
+            auth={
+                "username": name,
+                "publicUri": f"http://127.0.0.1:{self.port}",
+            },
         )
 
     def send_message(self, message: str):
@@ -127,29 +133,30 @@ class ClientSockets:
         message = self.clock.send_message(message, "server")
         self.__outbound.append(message)
 
-    # def __send_private_message(self, addr, username, message, dest_user):
-    #     # Check if addr is valid. If it is None, destination user is not
-    #     # connected to the server.
-    #     if addr is None:
-    #         self.gui.addMessage(f"User {dest_user} is not connected")
-    #     else:
-    #         self.p2p.send_private_message(addr, username, message, dest_user)
+    def __send_private_message(self, addr, username, message, dest_user, dest_user_id):
+        # Check if addr is valid. If it is None, destination user is not
+        # connected to the server.
+        if addr is None:
+            self.gui.addMessage(f"User {dest_user} is not connected")
+        else:
+            self.p2p.send_private_message(
+                addr, username, dest_user, dest_user_id, message
+            )
 
-    def send_private_message(self, dest_user: str, username: str, message: str):
-        pass
+    def send_private_message(self, dest_user, username, message):
+        # Send a private message via p2p server
+        def send_msg(addr, uuid):
+            self.__send_private_message(addr, username, message, dest_user, uuid),
 
-    #     # Send a private message via p2p server
-    #     try:
-    #         # Ask server for destination p2p url.
-    #         # Then, send the message to that url.
-    #         self.server_io.emit(
-    #             "addr_request",
-    #             {"username": dest_user},
-    #             callback=lambda addr: self.__send_private_message(
-    #                 addr, username, message, dest_user
-    #             ),
-    #         )
-    #     except TypeError:
-    #         self.gui.addMessage(
-    #             "There was an error sending the private message, please try again."
-    #         )
+        try:
+            # Ask server for destination p2p url.
+            # Then, send the message to that url.
+            self.server_io.emit(
+                "addr_request",
+                {"username": dest_user},
+                callback=send_msg,
+            )
+        except TypeError:
+            self.gui.addMessage(
+                "There was an error sending the private message, please try again."
+            )
