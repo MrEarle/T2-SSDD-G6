@@ -1,11 +1,11 @@
 import logging
-
-from src.utils.vectorClock import MESSAGE, SENDER_ID, VectorClock
 from typing import TypedDict
 
-from colorama import Fore as Color
 import socketio
+from colorama import Fore as Color
 from flask import Flask
+
+from src.utils.vectorClock import MESSAGE, SENDER_ID, VectorClock
 
 from .Users import UserList
 
@@ -32,6 +32,7 @@ class Server:
         self.server.on("connect", self.on_connect)
         self.server.on("disconnect", self.on_disconnect)
         self.server.on("chat", self.on_chat)
+        self.server.on("addr_request", self.addr_request)
         self.server.on("*", self.catch_all)
 
     def serve(self, port: int = 3000):
@@ -117,3 +118,9 @@ class Server:
                     self.server.emit("chat", msg, to=user.sid)
                 except Exception as e:
                     logger.error(e)
+
+    def addr_request(self, sid, data):
+        dest_username = data["username"]
+        dest_user = self.users.get_user_by_name(dest_username)
+
+        return dest_user.uri, dest_user.uuid

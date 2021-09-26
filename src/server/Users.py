@@ -1,8 +1,7 @@
-from collections import namedtuple
 import logging
+from collections import namedtuple
 from typing import Dict, Optional, Union
 from uuid import uuid4
-
 
 logger = logging.getLogger("[UserList]")
 
