@@ -1,9 +1,10 @@
 import logging
+from threading import Thread
 from typing import TypedDict
 
 import socketio
 from colorama import Fore as Color
-from werkzeug.serving import run_simple
+from werkzeug.serving import make_server
 
 from src.utils.vectorClock import MESSAGE, SENDER_ID, VectorClock
 
@@ -14,9 +15,18 @@ authType = TypedDict("Auth", {"username": str, "publicUri": str})
 
 
 class Server:
-    def __init__(self, min_user_count: int = 0) -> None:
+    def __init__(self, port: int = 3000, min_user_count: int = 0) -> None:
         self.server = socketio.Server(cors_allowed_origins="*")
         self.app = socketio.WSGIApp(self.server)
+
+        self.port = port
+        self.__created_server = make_server(
+            "127.0.0.1",
+            port,
+            self.app,
+            threaded=True,
+        )
+        self.__created_server_th: Thread = None
 
         self.users = UserList()
         self.history_sent = False
@@ -34,17 +44,17 @@ class Server:
         self.server.on("addr_request", self.addr_request)
         self.server.on("*", self.catch_all)
 
-    def serve(self, port: int = 3000):
-        logger.debug(f"Running App on port {port}")
-        run_simple(
-            "127.0.0.1",
-            port,
-            self.app,
-            use_debugger=True,
-            use_reloader=True,
-            threaded=True,
+    def serve(self):
+        logger.debug(f"Running App on port {self.port}")
+        self.__created_server_th = Thread(
+            target=self.__created_server.serve_forever, daemon=True
         )
-        logger.debug("Server disconnected")
+        self.__created_server_th.start()
+
+    def stop(self):
+        self.__created_server.shutdown()
+        self.__created_server_th.join()
+        logger.debug("Server terminated")
 
     def on_connect(self, sid: str, environ: dict, auth: authType):
         """

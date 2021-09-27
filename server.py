@@ -1,4 +1,5 @@
 from argparse import ArgumentParser
+from src.server.MigrationManager import MigrationManager
 from src.server.Server import Server
 import logging
 
@@ -7,11 +8,12 @@ logging.basicConfig(level=logging.DEBUG)
 parser = ArgumentParser()
 
 parser.add_argument(
-    "-u",
-    "--uri",
+    "-p",
+    "--port",
     required=False,
-    help="The server URI to connect to. Leave blank to start as the server",
-    type=str,
+    default=3000,
+    help="The port to listen as the server.",
+    type=int,
 )
 parser.add_argument(
     "-n",
@@ -24,10 +26,10 @@ parser.add_argument(
 
 if __name__ == "__main__":
     args = parser.parse_args()
-    print(args.uri)
+    print(args.port)
     print(args.min_n)
 
-    server = Server(args.min_n)
-    server.serve()
+    server = MigrationManager(args.port, args.min_n)
+    server.start()
 
     logging.debug("Exit")
