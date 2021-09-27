@@ -135,6 +135,21 @@ class Server:
                 except Exception as e:
                     logger.error(e)
 
+    def send_pause_messaging_signal(self, pause=True):
+        received = {uuid: False for uuid in self.users.users}
+
+        def update(uuid):
+            logger.debug(f"Received response from user with uuid {uuid}")
+            received[uuid] = True
+
+        for dest_uuid, user in self.users.users.items():
+            self.server.emit(
+                "pause_messaging",
+                pause,
+                to=user.sid,
+                callback=lambda: update(dest_uuid),
+            )
+
     def addr_request(self, sid, data):
         dest_username = data["username"]
         dest_user = self.users.get_user_by_name(dest_username)

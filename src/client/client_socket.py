@@ -24,6 +24,7 @@ class ClientSockets:
         # Should only send a message if the previous one was received by the server.
         self.__outbound = deque()
         self.__sendNext = False
+        self.__pauseMessages = False
 
         self.clock = None
 
@@ -50,6 +51,7 @@ class ClientSockets:
         self.server_io.on("server_message", self.server_message)
         self.server_io.on("chat", self.chat_message)
         self.server_io.on("message_history", self.chat_message_history)
+        self.server_io.on("pause_messaging", self.receive_pause_messages_signal)
 
     def connect(self):
         logger.debug("Initializing chat GUI")
@@ -62,6 +64,10 @@ class ClientSockets:
     def receive_uuid(self, uuid: str):
         self.clock = VectorClock(uuid, self.__on_deliver_message)
         self.p2p.clock = self.clock
+
+    def receive_pause_messages_signal(self, pause: bool):
+        self.__pauseMessages = pause
+        logger.debug(f"Received pause message with vaule {pause}")
 
     def server_message(self, data):
         # Cuando llega un mensaje del server, agregarlo en la gui
@@ -93,7 +99,7 @@ class ClientSockets:
         # acknowledged by the server.
         self.__sendNext = True
         while True:
-            if self.__outbound and self.__sendNext:
+            if self.__outbound and self.__sendNext and not self.__pauseMessages:
                 logger.debug(f"Outbound length: {len(self.__outbound)}")
                 # Prevent other messages from being sent
                 self.__sendNext = False
