@@ -3,7 +3,7 @@ from typing import TypedDict
 
 import socketio
 from colorama import Fore as Color
-from flask import Flask
+from werkzeug.serving import run_simple
 
 from src.utils.vectorClock import MESSAGE, SENDER_ID, VectorClock
 
@@ -16,8 +16,7 @@ authType = TypedDict("Auth", {"username": str, "publicUri": str})
 class Server:
     def __init__(self, min_user_count: int = 0) -> None:
         self.server = socketio.Server(cors_allowed_origins="*")
-        self.app = Flask(__name__)
-        self.app.wsgi_app = socketio.WSGIApp(self.server, self.app.wsgi_app)
+        self.app = socketio.WSGIApp(self.server)
 
         self.users = UserList()
         self.history_sent = False
@@ -37,7 +36,14 @@ class Server:
 
     def serve(self, port: int = 3000):
         logger.debug(f"Running App on port {port}")
-        self.app.run(port=port)
+        run_simple(
+            "127.0.0.1",
+            port,
+            self.app,
+            use_debugger=True,
+            use_reloader=True,
+            threaded=True,
+        )
         logger.debug("Server disconnected")
 
     def on_connect(self, sid: str, environ: dict, auth: authType):

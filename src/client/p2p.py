@@ -5,7 +5,7 @@ from datetime import time
 
 import socketio
 from colorama import Fore as Color
-from flask.app import Flask
+from werkzeug.serving import run_simple
 
 from src.client.gui_socketio import GUI
 from src.utils.vectorClock import VectorClock
@@ -19,9 +19,8 @@ def dns_lookup(addr: str):
 
 class P2P:
     def __init__(self) -> None:
-        self.app = Flask(__name__)
         self.p2p_srv = socketio.Server(cors_allowed_origin="*")
-        self.app.wsgi_app = socketio.WSGIApp(self.p2p_srv, self.app.wsgi_app)
+        self.app = socketio.WSGIApp(self.p2p_srv)
 
         self.gui: GUI = None
         self.clock: VectorClock = None
@@ -36,13 +35,13 @@ class P2P:
 
     def __start(self, port: int = 3000):
         logger.debug("Starting p2p server")
-        self.app.run(port=port)
+        run_simple("127.0.0.1", port, self.app)
 
     def start(self) -> int:
         port = self.get_available_port()
         logger.debug(f"Using port {port}")
 
-        threading.Thread(target=self.__start, args=[port], daemon=True).start()
+        threading.Thread(target=self.__start, args=[port]).start()
 
         return port
 
