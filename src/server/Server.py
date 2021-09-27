@@ -27,6 +27,7 @@ class Server:
             threaded=True,
         )
         self.__created_server_th: Thread = None
+        self.__migrating = False
 
         self.users = UserList()
         self.history_sent = False
@@ -62,6 +63,9 @@ class Server:
         Parameters:
             auth: { username: str, publicId: str }
         """
+        if self.__migrating:
+            raise ConnectionRefusedError()
+
         logger.debug(f"User logging in with auth: {auth}")
         user = self.users.add_user(auth["username"], sid, auth["publicUri"])
 
@@ -136,6 +140,7 @@ class Server:
                     logger.error(e)
 
     def send_pause_messaging_signal(self, pause=True):
+        self.__migrating = pause
         received = {uuid: False for uuid in self.users.users}
 
         def update(uuid):
