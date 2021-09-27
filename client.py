@@ -1,12 +1,6 @@
 from argparse import ArgumentParser
-import asyncio
-from src.client.p2p import P2P
 from src.client.client_socket import ClientSockets
-from src.server.MigrationManager import MigrationManager
-import eventlet
 import logging
-
-eventlet.monkey_patch()
 
 logging.basicConfig(level=logging.DEBUG)
 
@@ -33,15 +27,8 @@ if __name__ == "__main__":
     print(args.uri)
     print(args.min_n)
 
-    if not args.uri:
-        server = MigrationManager(args.min_n)
-        server_th = eventlet.spawn(server.serve)
-
     logging.debug("Setting up client")
     client = ClientSockets("http://127.0.0.1:3000/")
     client.initialize()
-
-    if server_th:
-        server_th.wait()
 
     logging.debug("Exit")
