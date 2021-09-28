@@ -163,5 +163,6 @@ class Server:
     def addr_request(self, sid, data):
         dest_username = data["username"]
         dest_user = self.users.get_user_by_name(dest_username)
-
-        return dest_user.uri, dest_user.uuid
+        if dest_user:
+            return dest_user.uri, dest_user.uuid
+        return None, None

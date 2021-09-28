@@ -68,7 +68,6 @@ class MigrationManager:
 
         logger.debug("Starting server")
         self.server_th.start()
-        self.server_th.join()
 
         logger.debug("Waiting for cycle to end (30s)")
         # 30 segundos para migrar
@@ -76,7 +75,7 @@ class MigrationManager:
 
         logger.debug("Cycle ended, initializing migration")
         # Migrar
-        self._migrate()
+        # self._migrate()
 
         # TODO: Temporal. Es mientras no se implementa completamente la migración
         while True:

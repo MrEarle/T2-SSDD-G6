@@ -7,12 +7,17 @@ applicable to local-area networks.
 
 """
 from collections import defaultdict
+import logging
 import pickle as pkl
 from datetime import datetime
 import socket
 from threading import Thread
-from time import sleep
+
+from colorama.ansi import Fore
 from ..utils.networking import get_public_ip
+
+logging.basicConfig(level=logging.DEBUG)
+logger = logging.getLogger(f"{Fore.GREEN}[DNS]{Fore.RESET}")
 
 
 def ctime():
@@ -52,8 +57,8 @@ class NameServer:
         self.s.bind(("0.0.0.0", self.port))
         self.s.listen(n)
 
-        print(
-            f"\n[{ctime()}] Name Server up and running on"
+        logger.debug(
+            f"[{ctime()}] Name Server up and running on"
             f" IP: {self.host}, PORT: {self.port}"
         )
 
@@ -79,16 +84,16 @@ class NameServer:
         with the new host location.
         if 'name' is 'client', the last locato
         """
-        print(f"[{ctime()}] Accepting connections")
+        logger.debug(f"[{ctime()}] Accepting connections")
         while True:
-            print(f"[{ctime()}] Waiting for next connection")
+            logger.debug(f"[{ctime()}] Waiting for next connection")
             (conn, addr) = self.s.accept()
             if conn:
                 client_th = Thread(target=self.accept_connection, args=[conn, addr])
                 client_th.start()
 
     def accept_connection(self, conn: socket.socket, addr):
-        print(
+        logger.debug(
             f"[{ctime()}] Accepted connection from " f"IP: {addr[0]}, PORT: {addr[1]}"
         )
 
@@ -104,7 +109,7 @@ class NameServer:
                         "addr": self.get_s_last_location(req["uri"]),
                     }
                     conn.send(pkl.dumps(msj))
-                    print(
+                    logger.debug(
                         f"[{ctime()}] Updated server last known location to:"
                         f" {req['addr']}"
                     )
@@ -115,20 +120,22 @@ class NameServer:
                         "req_uri": req["uri"],
                     }
                     conn.send(pkl.dumps(msj))
-                    print(
+                    logger.debug(
                         f"[{ctime()}] Last known location sent to client: {req['uri']} -> {msj['addr']}"
                     )
                 else:
                     # TODO: send empty message to sender
-                    print(f"[{ctime()}] Message didnt match")
+                    logger.debug(f"[{ctime()}] Message didnt match")
                     msj = {
                         "name": "empty",
                     }
                     conn.send(pkl.dumps(msj))
                 break
             except pkl.UnpicklingError as e:
-                print(e)
-        print(f"[{ctime()}] Closing connection from " f"IP: {addr[0]}, PORT: {addr[1]}")
+                logger.debug(e)
+        logger.debug(
+            f"[{ctime()}] Closing connection from " f"IP: {addr[0]}, PORT: {addr[1]}"
+        )
 
         conn.close()
 

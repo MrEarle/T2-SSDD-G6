@@ -30,8 +30,6 @@ parser.add_argument(
 
 if __name__ == "__main__":
     args = parser.parse_args()
-    print(args.uri)
-    print(args.min_n)
 
     if not args.uri:
         server = MigrationManager(args.min_n)

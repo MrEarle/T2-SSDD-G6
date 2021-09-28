@@ -44,8 +44,6 @@ parser.add_argument(
 
 if __name__ == "__main__":
     args = parser.parse_args()
-    print(args.port)
-    print(args.min_n)
 
     server = MigrationManager(
         args.dns_ip, args.dns_port, args.server_uri, args.port, args.min_n
