@@ -8,6 +8,24 @@ logging.basicConfig(level=logging.DEBUG)
 parser = ArgumentParser()
 
 parser.add_argument(
+    "--dns_ip",
+    default="localhost",
+    help="Domain name server ip",
+    type=str,
+)
+parser.add_argument(
+    "--dns_port",
+    default=8000,
+    help="Domain name server port",
+    type=int,
+)
+parser.add_argument(
+    "--server_uri",
+    default="default_server@local",
+    help="Server URI",
+    type=str,
+)
+parser.add_argument(
     "-p",
     "--port",
     required=False,
@@ -29,7 +47,9 @@ if __name__ == "__main__":
     print(args.port)
     print(args.min_n)
 
-    server = MigrationManager(args.port, args.min_n)
+    server = MigrationManager(
+        args.dns_ip, args.dns_port, args.server_uri, args.port, args.min_n
+    )
     server.start()
 
     logging.debug("Exit")

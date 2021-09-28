@@ -5,11 +5,23 @@ import logging
 logging.basicConfig(level=logging.DEBUG)
 
 parser = ArgumentParser()
+parser.add_argument(
+    "--dns_ip",
+    default="localhost",
+    help="Domain name server ip",
+    type=str,
+)
+parser.add_argument(
+    "--dns_port",
+    default=8000,
+    help="Domain name server port",
+    type=int,
+)
 
 parser.add_argument(
     "-u",
     "--uri",
-    required=False,
+    default="default_server@local",
     help="The server URI to connect to. Leave blank to start as the server",
     type=str,
 )
@@ -28,7 +40,7 @@ if __name__ == "__main__":
     print(args.min_n)
 
     logging.debug("Setting up client")
-    client = ClientSockets("http://127.0.0.1:3000/")
+    client = ClientSockets(args.dns_ip, args.dns_port, args.uri)
     client.initialize()
 
     logging.debug("Exit")

@@ -1,5 +1,6 @@
 import logging
 from collections import deque
+from src.utils.networking import request_server_adrr
 
 import socketio
 from colorama import Fore as Color
@@ -13,7 +14,9 @@ logger = logging.getLogger(f"{Color.RED}[ClientSockets]{Color.RESET}")
 
 
 class ClientSockets:
-    def __init__(self, server_uri: str) -> None:
+    def __init__(self, dns_ip: str, dns_port: int, server_uri: str) -> None:
+        self.dns_host = dns_ip
+        self.dns_port = dns_port
         self.server_uri = server_uri
         self.gui = GUI(
             self.server_connect, self.send_private_message, self.send_message
@@ -36,7 +39,7 @@ class ClientSockets:
         self.p2p.initialize_p2p_server(self.gui)
 
         # Get public url and port for p2p connection
-        self.port = self.p2p.start()
+        self.public_ip, self.port = self.p2p.start()
 
         # Deploy the chat GUI
         self.gui.initialize()
@@ -120,14 +123,19 @@ class ClientSockets:
             self.server_io.sleep(1e-4)  # 100 usec
 
     def server_connect(self, name):
+        # Get server address
+        server_address = request_server_adrr(
+            self.dns_host, self.dns_port, self.server_uri
+        )
+        logger.debug(f"Obtained server address: {server_address}")
         # Connect to the server.
         # Sends session information, such as name, port and p2p server url.
         logger.debug(f"Connecting to server {self.server_uri}")
         self.server_io.connect(
-            self.server_uri,
+            server_address,
             auth={
                 "username": name,
-                "publicUri": f"http://127.0.0.1:{self.port}",
+                "publicUri": f"http://{self.public_ip}:{self.port}",
             },
         )
 

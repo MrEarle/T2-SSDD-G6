@@ -1,12 +1,13 @@
 import logging
 from threading import Thread
+from tkinter.constants import E
 from typing import TypedDict
 
 import socketio
 from colorama import Fore as Color
 from werkzeug.serving import make_server
 
-from src.utils.vectorClock import MESSAGE, SENDER_ID, VectorClock
+from ..utils.vectorClock import MESSAGE, SENDER_ID, VectorClock
 
 from .Users import UserList
 
@@ -15,13 +16,15 @@ authType = TypedDict("Auth", {"username": str, "publicUri": str})
 
 
 class Server:
-    def __init__(self, port: int = 3000, min_user_count: int = 0) -> None:
+    def __init__(self, host: str, port: int = 3000, min_user_count: int = 0) -> None:
         self.server = socketio.Server(cors_allowed_origins="*")
         self.app = socketio.WSGIApp(self.server)
 
         self.port = port
+        self.host = host
+
         self.__created_server = make_server(
-            "127.0.0.1",
+            host,
             port,
             self.app,
             threaded=True,
@@ -45,8 +48,10 @@ class Server:
         self.server.on("addr_request", self.addr_request)
         self.server.on("*", self.catch_all)
 
-    def serve(self):
-        logger.debug(f"Running App on port {self.port}")
+    def serve(
+        self,
+    ):
+        logger.debug(f"Running App on http://{self.host}:{self.port}")
         self.__created_server_th = Thread(
             target=self.__created_server.serve_forever, daemon=True
         )
