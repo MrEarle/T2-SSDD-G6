@@ -40,14 +40,11 @@ def send_server_addr(
     msg = pickle.dumps(
         {"name": "update_server", "addr": server_addr, "uri": server_uri}
     )
-    logger.debug(f"Connecting to DNS at {dns_host}:{dns_port}")
 
     s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     s.connect((dns_host, dns_port))
 
-    logger.debug("Connected to DNS. Sending message...")
     s.sendall(msg)
-    logger.debug("Message sent. Receiving...")
 
     while True:
         try:
@@ -55,6 +52,28 @@ def send_server_addr(
             response: dict = pickle.loads(response)
 
             if response["name"] == "update_server_response":
+                s.close()
+                return response["addr"]
+        except ConnectionResetError:
+            pass
+        sleep(0.1)
+
+
+def request_random_server(dns_host: str, dns_port: int, self_uri: str) -> str:
+    msg = pickle.dumps({"name": "get_random_server", "self_uri": self_uri})
+    logger.debug(f"Connecting to DNS at {dns_host}:{dns_port}")
+
+    s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    s.connect((dns_host, dns_port))
+
+    s.sendall(msg)
+
+    while True:
+        try:
+            response = s.recv(2048)
+            response: dict = pickle.loads(response)
+
+            if response["name"] == "random_server_response":
                 s.close()
                 return response["addr"]
         except ConnectionResetError:

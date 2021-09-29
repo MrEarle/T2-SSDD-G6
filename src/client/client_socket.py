@@ -55,6 +55,7 @@ class ClientSockets:
         self.server_io.on("chat", self.chat_message)
         self.server_io.on("message_history", self.chat_message_history)
         self.server_io.on("pause_messaging", self.receive_pause_messages_signal)
+        self.server_io.on("reconnect", self.reconnect)
 
     def connect(self):
         logger.debug("Initializing chat GUI")
@@ -63,6 +64,12 @@ class ClientSockets:
         # Start the message sending from queue in the background process
         logger.debug("Starting message delivery queue")
         self.server_io.start_background_task(self.__run)
+
+    def reconnect(self):
+        self.server_io.disconnect()
+        self.initialize_server_connection()
+        self.server_connect(self.gui.name)
+        return True
 
     def receive_uuid(self, uuid: str):
         self.clock = VectorClock(uuid, self.__on_deliver_message)

@@ -1,7 +1,6 @@
 import logging
 from threading import Thread
-from tkinter.constants import E
-from typing import TypedDict
+from typing import Tuple, TypedDict
 
 import socketio
 from colorama import Fore as Color
@@ -16,7 +15,12 @@ authType = TypedDict("Auth", {"username": str, "publicUri": str})
 
 
 class Server:
-    def __init__(self, host: str, port: int = 3000, min_user_count: int = 0) -> None:
+    def __init__(
+        self,
+        host: str,
+        port: int = 3000,
+        min_user_count: int = 0,
+    ) -> None:
         self.server = socketio.Server(cors_allowed_origins="*")
         self.app = socketio.WSGIApp(self.server)
 
@@ -48,9 +52,7 @@ class Server:
         self.server.on("addr_request", self.addr_request)
         self.server.on("*", self.catch_all)
 
-    def serve(
-        self,
-    ):
+    def serve(self):
         logger.debug(f"Running App on http://{self.host}:{self.port}")
         self.__created_server_th = Thread(
             target=self.__created_server.serve_forever, daemon=True
@@ -68,6 +70,18 @@ class Server:
         Parameters:
             auth: { username: str, publicId: str }
         """
+        # Manejar conexion de migracion
+        self.on_connect_migration(sid, auth)
+
+        # Manejar conexion de cliente
+        self.on_connect_client(sid, auth)
+
+    def on_connect_migration(self, sid: str, auth: authType):
+        # TODO: Si en auth hay un flag de migracion, hacer logica de migracion
+        pass
+
+    def on_connect_client(self, sid: str, auth: authType):
+        # Si estoy migrando no aceptar conexiones de clientes
         if self.__migrating:
             raise ConnectionRefusedError()
 
@@ -159,6 +173,9 @@ class Server:
                 to=user.sid,
                 callback=lambda: update(dest_uuid),
             )
+
+    def send_reconnect_signal(self):
+        self.server.emit("reconnect")
 
     def addr_request(self, sid, data):
         dest_username = data["username"]

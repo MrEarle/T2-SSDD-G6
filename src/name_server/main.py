@@ -12,12 +12,16 @@ import pickle as pkl
 from datetime import datetime
 import socket
 from threading import Thread
+import re
+from random import choice
 
 from colorama.ansi import Fore
 from ..utils.networking import get_public_ip
 
 logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(f"{Fore.GREEN}[DNS]{Fore.RESET}")
+
+MIGRATION_REGEX = r"^migration@.+:\d+$"
 
 
 def ctime():
@@ -123,6 +127,12 @@ class NameServer:
                     logger.debug(
                         f"[{ctime()}] Last known location sent to client: {req['uri']} -> {msj['addr']}"
                     )
+                elif req["name"] == "get_random_server":
+                    msj = {
+                        "name": "random_server_response",
+                        "addr": self.get_random_server(req["self_uri"]),
+                    }
+                    conn.send(pkl.dumps(msj))
                 else:
                     # TODO: send empty message to sender
                     logger.debug(f"[{ctime()}] Message didnt match")
@@ -157,6 +167,18 @@ class NameServer:
         if len(self.locations[uri]):
             return self.locations[uri][-1]
         return None
+
+    def get_random_server(self, self_uri: str):
+        servers = [
+            addr[-1]
+            for uri, addr in self.locations.items()
+            if (addr and re.match(MIGRATION_REGEX, uri) and uri != self_uri)
+        ]
+
+        if len(servers) == 0:
+            return None
+
+        return choice(servers)
 
 
 def serve():

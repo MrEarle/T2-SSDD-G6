@@ -40,6 +40,9 @@ parser.add_argument(
     help="Minimum number of clients before starting the connection.",
     type=int,
 )
+parser.add_argument(
+    "-s", "--start_as_server", action="store_true", help="Start this as acting server"
+)
 
 
 if __name__ == "__main__":
@@ -48,6 +51,6 @@ if __name__ == "__main__":
     server = MigrationManager(
         args.dns_ip, args.dns_port, args.server_uri, args.port, args.min_n
     )
-    server.start()
+    server.start(start_as_server=args.start_as_server)
 
     logging.debug("Exit")
