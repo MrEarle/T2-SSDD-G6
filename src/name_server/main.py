@@ -54,7 +54,7 @@ class NameServer:
         self.host = host
         self.port = port
         self.n = n
-        self.locations = defaultdict(list)  # {name: addr}
+        self.locations = {}  # {uid: http://ip:port}
 
         # initialize NS
         self.s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -149,7 +149,7 @@ class NameServer:
 
         conn.close()
 
-    def update_location(self, uri, host):
+    def update_location(self, uri: str, host: str):
         """Receives a new IP from the server host and update the list
         of known locations
 
@@ -158,19 +158,14 @@ class NameServer:
         host : str
             New hos location
         """
-        if len(self.locations[uri]) <= 2:
-            self.locations[uri].append(host)
-        else:
-            self.locations[uri][-1] = host
+        self.locations[uri] = host
 
-    def get_s_last_location(self, uri):
-        if len(self.locations[uri]):
-            return self.locations[uri][-1]
-        return None
+    def get_s_last_location(self, uri: str):
+        return self.locations.get(uri, None)
 
     def get_random_server(self, self_uri: str):
         servers = [
-            addr[-1]
+            addr
             for uri, addr in self.locations.items()
             if (addr and re.match(MIGRATION_REGEX, uri) and uri != self_uri)
         ]

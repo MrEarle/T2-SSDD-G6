@@ -53,6 +53,7 @@ class Server:
         self.server.on("*", self.catch_all)
 
     def serve(self):
+        # TODO: Registrarse en el DNS
         logger.debug(f"Running App on http://{self.host}:{self.port}")
         self.__created_server_th = Thread(
             target=self.__created_server.serve_forever, daemon=True
