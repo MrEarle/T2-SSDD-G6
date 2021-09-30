@@ -48,6 +48,8 @@ class MigrationManager:
 
             # TODO: 2. Conectar y notificar migracion
             logger.debug(f"Selected new server {new_addr}")
+
+
             # TODO: Implementar bien esta funcion
             selected_server = self.migration_server.request_migration_connection(
                 new_addr

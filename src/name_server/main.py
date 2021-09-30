@@ -6,16 +6,16 @@ applicable to local-area networks.
 
 
 """
-from collections import defaultdict
 import logging
 import pickle as pkl
-from datetime import datetime
-import socket
-from threading import Thread
 import re
+import socket
+from datetime import datetime
 from random import choice
+from threading import Thread
 
 from colorama.ansi import Fore
+
 from ..utils.networking import get_public_ip
 
 logging.basicConfig(level=logging.DEBUG)
@@ -148,6 +148,9 @@ class NameServer:
         )
 
         conn.close()
+        for uri in self.locations:
+            if self.locations[uri] == f"{addr[0]}:{addr[1]}":
+                del self.locations[uri]
 
     def update_location(self, uri: str, host: str):
         """Receives a new IP from the server host and update the list
@@ -157,6 +160,8 @@ class NameServer:
         ----------
         host : str
             New hos location
+        uri : str
+            New uri name
         """
         self.locations[uri] = host
 
