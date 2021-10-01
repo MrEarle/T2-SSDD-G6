@@ -126,7 +126,7 @@ class Server:
 
         logger.debug(f"{user.name} connected with sid {user.sid}")
 
-    def on_migrate(self, sid: str, vector_clock_inits, messages, history_sent):
+    def on_migrate(self, _, vector_clock_inits, messages, history_sent):
         logger.debug("Starting on_migrate endpoint")
         #self.clock = self.clock.load_from(vector_clock_inits[0], vector_clock_inits[1])
         self.clock = self.clock.load_from(vector_clock_inits[0], vector_clock_inits[1])
@@ -204,3 +204,7 @@ class Server:
         if dest_user:
             return dest_user.uri, dest_user.uuid
         return None, None
+
+    def cleanup(self):
+        self.clock = VectorClock("server", self.__on_deliver_message)
+        self.messages = []

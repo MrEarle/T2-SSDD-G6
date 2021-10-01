@@ -24,17 +24,9 @@ parser.add_argument(
 parser.add_argument(
     "-u",
     "--server_uri",
-    default="default_server@local",
+    default="backend.com",
     help="Server URI",
     type=str,
-)
-parser.add_argument(
-    "-p",
-    "--port",
-    required=False,
-    default=3000,
-    help="The port to listen as the server.",
-    type=int,
 )
 parser.add_argument(
     "-n",
@@ -52,7 +44,7 @@ if __name__ == "__main__":
 
     # Server en otro thread
     server = MigrationManager(
-        args.dns_ip, args.dns_port, args.server_uri, args.port, args.min_n
+        args.dns_ip, args.dns_port, args.server_uri, args.min_n
     )
     server_th = Thread(target=server.start, args=[args.start_as_server])
     server_th.start()

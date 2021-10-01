@@ -18,12 +18,11 @@ class MigrationManager:
         dns_host: str,
         dns_port: int,
         server_uri: str,
-        port: int = 3000,
         min_n: int = 0,
     ) -> None:
         self.server: Server = None
         self.server_th: Thread = None
-        self.port = port
+        self.port: int = None
         self.min_n = min_n
         self.dns_host = dns_host
         self.dns_port = dns_port
@@ -93,6 +92,7 @@ class MigrationManager:
             self.client.disconnect()
             self.client = None
             callback(addr)
+            self.server.cleanup()
 
         self.client.emit("migrate", data, callback=on_ack)
 

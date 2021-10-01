@@ -65,11 +65,9 @@ class ClientSockets:
 
         # Start the message sending from queue in the background process
         logger.debug("Starting message delivery queue")
-        # TODO: arreglar esto para que no se creen infinitas tareas
         if self.flag:
             self.server_io.start_background_task(self.__run)
             self.flag = False
-        # else: self.__run()
 
     def reconnect(self):
         self.reconnecting = True
