@@ -69,6 +69,7 @@ class MigrationManager:
             self._on_migrate_complete,
             new_addr
         )
+        return True
 
         # Una vez que el nuevo server responda con su inicializacion del server:
 
@@ -86,8 +87,7 @@ class MigrationManager:
     def request_migration(self, vector_clock_inits, messages, callback: Callable, addr):
         # vector = pkl.dumps(vector_clock_inits)
         messages = messages
-        print(vector_clock_inits)
-        data = (vector_clock_inits, messages)
+        data = (vector_clock_inits, messages, self.server.history_sent)
 
         def on_ack():
             self.client.disconnect()

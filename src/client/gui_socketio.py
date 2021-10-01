@@ -89,17 +89,17 @@ class GUI:
             return
         self.name = name
 
-    def onConnect(self):
+    def onConnect(self, reconnecting=False):
         self.login.destroy()
 
         self.Window.deiconify()
         self.labelHead.config(text=self.name)
-
-        self.addMessage("Welcome to the chat!")
-        self.addMessage("To send a private message, type:\n\t@<username> <message>")
-        self.addMessage(
-            "With <username> being the destination user, and <message> being the message to send."
-        )
+        if not reconnecting:
+            self.addMessage("Welcome to the chat!")
+            self.addMessage("To send a private message, type:\n\t@<username> <message>")
+            self.addMessage(
+                "With <username> being the destination user, and <message> being the message to send."
+            )
 
         logger.debug("[GUI] Connection initialized. Listening to server")
 

@@ -31,6 +31,7 @@ class ClientSockets:
 
         self.clock = None
         self.flag = True
+        self.reconnecting = False
 
     def initialize(self):
         # Initialize connection to server
@@ -60,7 +61,7 @@ class ClientSockets:
 
     def connect(self):
         logger.debug("Initializing chat GUI")
-        self.gui.onConnect()
+        self.gui.onConnect(self.reconnecting)
 
         # Start the message sending from queue in the background process
         logger.debug("Starting message delivery queue")
@@ -71,9 +72,10 @@ class ClientSockets:
         # else: self.__run()
 
     def reconnect(self):
+        self.reconnecting = True
         self.server_io.disconnect()
         self.initialize_server_connection()
-        self.server_connect(self.gui.name)
+        self.server_connect(self.gui.name, self.reconnecting)
         return True
 
     def receive_uuid(self, uuid: str):
@@ -137,7 +139,7 @@ class ClientSockets:
             # Yield the CPU
             self.server_io.sleep(1e-4)  # 100 usec
 
-    def server_connect(self, name):
+    def server_connect(self, name, reconnecting=False):
         # Get server address
         server_address = request_server_adrr(
             self.dns_host, self.dns_port, self.server_uri
@@ -151,6 +153,7 @@ class ClientSockets:
             auth={
                 "username": name,
                 "publicUri": f"http://{self.public_ip}:{self.port}",
+                "reconnecting": reconnecting
             },
         )
         self.__pauseMessages = False

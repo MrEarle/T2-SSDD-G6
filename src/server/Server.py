@@ -100,15 +100,16 @@ class Server:
             logger.debug(f'Username {auth["username"]} is already taken')
             raise ConnectionRefusedError("Username is invalid or already taken")
 
-        self.server.emit(
-            "server_message",
-            {"message": f'\u2713 {auth["username"]} has connected to the server'},
-        )
+        if not auth["reconnecting"]:
+            self.server.emit(
+                "server_message",
+                {"message": f'\u2713 {auth["username"]} has connected to the server'},
+            )
 
         self.server.emit("send_uuid", user.uuid, room=sid)
 
         # Si se supero el limite inferior de usuarios conectados, mandar la historia
-        if len(self.users) >= self.min_user_count:
+        if len(self.users) >= self.min_user_count and not auth["reconnecting"]:
             logger.debug(f"Sending history")
 
             if self.history_sent:
@@ -125,15 +126,13 @@ class Server:
 
         logger.debug(f"{user.name} connected with sid {user.sid}")
 
-    def on_migrate(self, sid: str, vector_clock_inits, messages):
-        print()
-        print('vector clock', vector_clock_inits)
-        print()
-        #vector_clock_inits = pkl.loads(vector_clock_inits)
-
+    def on_migrate(self, sid: str, vector_clock_inits, messages, history_sent):
+        logger.debug("Starting on_migrate endpoint")
         #self.clock = self.clock.load_from(vector_clock_inits[0], vector_clock_inits[1])
         self.clock = self.clock.load_from(vector_clock_inits[0], vector_clock_inits[1])
         self.messages = messages
+        self.__migrating = False
+        self.history_sent = history_sent
         self.cycle_th = Thread(target=self.migration_manager._server_cycle, daemon=True)
         self.cycle_th.start()
 
@@ -142,17 +141,18 @@ class Server:
 
     def on_disconnect(self, sid):
         # Obtener el usuario, si existe
-        logger.debug("User disconnected")
         client = self.users.get_user_by_sid(sid)
         if client:
-            # Notificar al resto que el usuario se desconecto
+            logger.debug(f"User disconnected: {client.name}")
+
+                # Notificar al resto que el usuario se desconecto
             self.server.emit(
                 "server_message",
                 {"message": f"\u274C {client.name} has disconnected from the server"},
             )
 
-        # Eliminar al usuario del registro
-        self.users.del_user(client.uuid)
+            # Eliminar al usuario del registro
+            self.users.del_user(client.uuid)
 
     def on_chat(self, sid, data):
         """Maneja el broadcast de los chats"""
@@ -196,6 +196,7 @@ class Server:
 
     def send_reconnect_signal(self):
         self.server.emit("reconnect")
+        self.users = UserList()
 
     def addr_request(self, sid, data):
         dest_username = data["username"]

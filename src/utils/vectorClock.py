@@ -132,7 +132,6 @@ class VectorClock:
                 break
 
     def load_from(self, sent_messages: dict, received_messages: dict):
-        print('DEKWAD', sent_messages, received_messages)
         self.sent_messages.update(sent_messages)
         self.received_messages.update(received_messages)
         return self

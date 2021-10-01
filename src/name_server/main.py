@@ -179,6 +179,7 @@ class NameServer:
 
     def set_current_host(self, uri: str, address: str):
         self.uri2address[uri] = address
+        logger.debug(f'Set current host addr: {address}')
 
     def get_random_server(self, uri: str):
         servers = [
