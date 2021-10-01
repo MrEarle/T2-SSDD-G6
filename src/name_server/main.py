@@ -1,3 +1,4 @@
+
 """Implementation of a simple Name Server with SSP (stub, scion pairs)
 Chains, this is a simple solution for locating entities that is mainly
 applicable to local-area networks.
@@ -204,3 +205,4 @@ def serve():
 
 if __name__ == "__main__":
     serve()
+
