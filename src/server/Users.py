@@ -22,7 +22,7 @@ class UserList:
 
     def add_user(self, username: str, sid: str, uri: str) -> Optional[User]:
         if not username or self.get_user_by_name(username):
-            logger.debug(f"Username with name {username} already exists")
+            logger.debug(f"Username with name {username} already exists. Users:", self.users)
             return None
         uuid = str(uuid4())
         user = User(username, uuid, uri, sid)

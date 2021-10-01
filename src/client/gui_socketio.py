@@ -1,8 +1,12 @@
+import logging
 from tkinter import *
 from tkinter import messagebox
 from typing import Callable
 import re
+from colorama.ansi import Fore
 from socketio.exceptions import ConnectionError as SioConnError
+
+logger = logging.getLogger(f"{Fore.LIGHTRED_EX}[GUI]{Fore.RESET}")
 
 
 class GUI:
@@ -72,32 +76,32 @@ class GUI:
 
     def goAhead(self, name):
         # Executed when button "login" is pressed
-        print("[GUI] Initializing connection")
-        print("[GUI] Sending name to server")
+        logger.debug("[GUI] Initializing connection")
+        logger.debug("[GUI] Sending name to server")
         # Try to initialize the server
         try:
             self.server_connect(name)
         except SioConnError as e:
-            print(e)
+            logger.debug(e)
             messagebox.showwarning(
                 "Username already taken", f"The username {name} is already taken."
             )
             return
         self.name = name
 
-    def onConnect(self):
+    def onConnect(self, reconnecting=False):
         self.login.destroy()
 
         self.Window.deiconify()
         self.labelHead.config(text=self.name)
+        if not reconnecting:
+            self.addMessage("Welcome to the chat!")
+            self.addMessage("To send a private message, type:\n\t@<username> <message>")
+            self.addMessage(
+                "With <username> being the destination user, and <message> being the message to send."
+            )
 
-        self.addMessage("Welcome to the chat!")
-        self.addMessage("To send a private message, type:\n\t@<username> <message>")
-        self.addMessage(
-            "With <username> being the destination user, and <message> being the message to send."
-        )
-
-        print("[GUI] Connection initialized. Listening to server")
+        logger.debug("[GUI] Connection initialized. Listening to server")
 
     def layout(self):
         # The main layout of the chat

@@ -1,22 +1,31 @@
 from argparse import ArgumentParser
-import asyncio
-from src.client.p2p import P2P
+from time import sleep
 from src.client.client_socket import ClientSockets
 from src.server.MigrationManager import MigrationManager
-import eventlet
+from threading import Thread
 import logging
-
-eventlet.monkey_patch()
 
 logging.basicConfig(level=logging.DEBUG)
 
 parser = ArgumentParser()
 
 parser.add_argument(
+    "--dns_ip",
+    default="localhost",
+    help="Domain name server ip",
+    type=str,
+)
+parser.add_argument(
+    "--dns_port",
+    default=8000,
+    help="Domain name server port",
+    type=int,
+)
+parser.add_argument(
     "-u",
-    "--uri",
-    required=False,
-    help="The server URI to connect to. Leave blank to start as the server",
+    "--server_uri",
+    default="backend.com",
+    help="Server URI",
     type=str,
 )
 parser.add_argument(
@@ -26,22 +35,20 @@ parser.add_argument(
     help="Minimum number of clients before starting the connection.",
     type=int,
 )
-
+parser.add_argument(
+    "-s", "--start_as_server", action="store_true", help="Start this as acting server"
+)
 
 if __name__ == "__main__":
     args = parser.parse_args()
-    print(args.uri)
-    print(args.min_n)
 
-    if not args.uri:
-        server = MigrationManager(args.min_n)
-        server_th = eventlet.spawn(server.serve)
+    # Server en otro thread
+    server = MigrationManager(
+        args.dns_ip, args.dns_port, args.server_uri, args.min_n
+    )
+    server_th = Thread(target=server.start, args=[args.start_as_server])
+    server_th.start()
 
-    logging.debug("Setting up client")
-    client = ClientSockets("http://127.0.0.1:3000/")
+    # Cliente en thread principal
+    client = ClientSockets(args.dns_ip, args.dns_port, args.server_uri)
     client.initialize()
-
-    if server_th:
-        server_th.wait()
-
-    logging.debug("Exit")

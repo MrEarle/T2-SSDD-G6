@@ -131,6 +131,14 @@ class VectorClock:
                 message_delivered = True
                 break
 
+    def load_from(self, sent_messages: dict, received_messages: dict):
+        self.sent_messages.update(sent_messages)
+        self.received_messages.update(received_messages)
+        return self
+
+    def dump(self):
+        return [dict(self.sent_messages), dict(self.received_messages)]
+
 
 if __name__ == "__main__":
 

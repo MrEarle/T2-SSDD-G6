@@ -1,5 +1,6 @@
 import logging
 from collections import deque
+from src.utils.networking import request_server_adrr
 
 import socketio
 from colorama import Fore as Color
@@ -13,7 +14,9 @@ logger = logging.getLogger(f"{Color.RED}[ClientSockets]{Color.RESET}")
 
 
 class ClientSockets:
-    def __init__(self, server_uri: str) -> None:
+    def __init__(self, dns_ip: str, dns_port: int, server_uri: str) -> None:
+        self.dns_host = dns_ip
+        self.dns_port = dns_port
         self.server_uri = server_uri
         self.gui = GUI(
             self.server_connect, self.send_private_message, self.send_message
@@ -24,8 +27,11 @@ class ClientSockets:
         # Should only send a message if the previous one was received by the server.
         self.__outbound = deque()
         self.__sendNext = False
+        self.__pauseMessages = False
 
         self.clock = None
+        self.flag = True
+        self.reconnecting = False
 
     def initialize(self):
         # Initialize connection to server
@@ -35,7 +41,7 @@ class ClientSockets:
         self.p2p.initialize_p2p_server(self.gui)
 
         # Get public url and port for p2p connection
-        self.port = self.p2p.start()
+        self.public_ip, self.port = self.p2p.start()
 
         # Deploy the chat GUI
         self.gui.initialize()
@@ -50,18 +56,33 @@ class ClientSockets:
         self.server_io.on("server_message", self.server_message)
         self.server_io.on("chat", self.chat_message)
         self.server_io.on("message_history", self.chat_message_history)
+        self.server_io.on("pause_messaging", self.receive_pause_messages_signal)
+        self.server_io.on("reconnect", self.reconnect)
 
     def connect(self):
         logger.debug("Initializing chat GUI")
-        self.gui.onConnect()
+        self.gui.onConnect(self.reconnecting)
 
         # Start the message sending from queue in the background process
         logger.debug("Starting message delivery queue")
-        self.server_io.start_background_task(self.__run)
+        if self.flag:
+            self.server_io.start_background_task(self.__run)
+            self.flag = False
+
+    def reconnect(self):
+        self.reconnecting = True
+        self.server_io.disconnect()
+        self.initialize_server_connection()
+        self.server_connect(self.gui.name, self.reconnecting)
+        return True
 
     def receive_uuid(self, uuid: str):
         self.clock = VectorClock(uuid, self.__on_deliver_message)
         self.p2p.clock = self.clock
+
+    def receive_pause_messages_signal(self, pause: bool):
+        self.__pauseMessages = pause
+        logger.debug(f"Received pause message with vaule {pause}")
 
     def server_message(self, data):
         # Cuando llega un mensaje del server, agregarlo en la gui
@@ -93,12 +114,15 @@ class ClientSockets:
         # acknowledged by the server.
         self.__sendNext = True
         while True:
-            if self.__outbound and self.__sendNext:
+            if self.__outbound and self.__sendNext and not self.__pauseMessages:
                 logger.debug(f"Outbound length: {len(self.__outbound)}")
                 # Prevent other messages from being sent
                 self.__sendNext = False
 
                 # Get next message to send
+                print("\n")
+                print(self.__outbound)
+                print("\n")
                 msg = self.__outbound.popleft()
 
                 # Send message to server, and allow next message to be sent
@@ -113,17 +137,24 @@ class ClientSockets:
             # Yield the CPU
             self.server_io.sleep(1e-4)  # 100 usec
 
-    def server_connect(self, name):
+    def server_connect(self, name, reconnecting=False):
+        # Get server address
+        server_address = request_server_adrr(
+            self.dns_host, self.dns_port, self.server_uri
+        )
+        logger.debug(f"Obtained server address: {server_address}")
         # Connect to the server.
         # Sends session information, such as name, port and p2p server url.
         logger.debug(f"Connecting to server {self.server_uri}")
         self.server_io.connect(
-            self.server_uri,
+            server_address,
             auth={
                 "username": name,
-                "publicUri": f"http://127.0.0.1:{self.port}",
+                "publicUri": f"http://{self.public_ip}:{self.port}",
+                "reconnecting": reconnecting
             },
         )
+        self.__pauseMessages = False
 
     def send_message(self, message: str):
         # Appends a message to the outbound queue.
