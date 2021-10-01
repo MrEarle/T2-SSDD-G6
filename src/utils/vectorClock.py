@@ -132,13 +132,13 @@ class VectorClock:
                 break
 
     def load_from(self, sent_messages: dict, received_messages: dict):
-        print(sent_messages, received_messages)
+        print('DEKWAD', sent_messages, received_messages)
         self.sent_messages.update(sent_messages)
         self.received_messages.update(received_messages)
         return self
 
     def dump(self):
-        return dict(self.sent_messages), dict(self.received_messages)
+        return [dict(self.sent_messages), dict(self.received_messages)]
 
 
 if __name__ == "__main__":

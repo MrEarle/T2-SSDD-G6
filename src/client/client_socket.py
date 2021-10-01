@@ -30,6 +30,7 @@ class ClientSockets:
         self.__pauseMessages = False
 
         self.clock = None
+        self.flag = True
 
     def initialize(self):
         # Initialize connection to server
@@ -63,7 +64,11 @@ class ClientSockets:
 
         # Start the message sending from queue in the background process
         logger.debug("Starting message delivery queue")
-        self.server_io.start_background_task(self.__run)
+        # TODO: arreglar esto para que no se creen infinitas tareas
+        if self.flag:
+            self.server_io.start_background_task(self.__run)
+            self.flag = False
+        # else: self.__run()
 
     def reconnect(self):
         self.server_io.disconnect()
@@ -115,6 +120,9 @@ class ClientSockets:
                 self.__sendNext = False
 
                 # Get next message to send
+                print("\n")
+                print(self.__outbound)
+                print("\n")
                 msg = self.__outbound.popleft()
 
                 # Send message to server, and allow next message to be sent
@@ -145,6 +153,7 @@ class ClientSockets:
                 "publicUri": f"http://{self.public_ip}:{self.port}",
             },
         )
+        self.__pauseMessages = False
 
     def send_message(self, message: str):
         # Appends a message to the outbound queue.

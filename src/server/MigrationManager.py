@@ -1,11 +1,13 @@
 import logging
-from src.server.MigrationServer import MigrationServer
+import pickle as pkl
 from threading import Thread
 from time import sleep
+from typing import Callable
 
+import socketio
 from colorama import Fore as Color
 from .Server import Server
-from ..utils.networking import get_public_ip, request_random_server, send_server_addr
+from ..utils.networking import get_public_ip, request_random_server, send_server_addr, change_server_addr
 
 logger = logging.getLogger(f"{Color.MAGENTA}[MigrationManager]{Color.RESET}")
 
@@ -29,6 +31,7 @@ class MigrationManager:
 
     def _start_server(self, vector_clock_init=None, messages=None):
         self.server = Server(
+            self,
             self.ip,
             self.port,
             self.min_n,
@@ -38,66 +41,66 @@ class MigrationManager:
     def _migrate(self):
         # TODO: 1. Request random server
         selected_server = False
-        while not selected_server:
+        new_addr = None
+        while not selected_server or new_addr == None:
             new_addr = request_random_server(
-                self.dns_host, self.dns_port, self.migration_server.server_uri
+                self.dns_host, self.dns_port, self.server_uri
             )
-            if new_addr is None:
-                self.server.send_pause_messaging_signal(pause=False)
-                return False
+            print(new_addr, "_migrate")
+
+            if not new_addr: return False
 
             # TODO: 2. Conectar y notificar migracion
             logger.debug(f"Selected new server {new_addr}")
-            # TODO: Implementar bien esta funcion
-            selected_server = self.migration_server.request_migration_connection(
-                new_addr
-            )
+            # TODO: Implementar bien esta funcion + OK
+            selected_server = self.request_migration_connection(new_addr)
 
-        # TODO: 3. Esperar a OK del nuevo server
 
         # TODO: 4. Pausar clientes
         # Avisar a clientes que paren de mandar mensajes
         self.server.send_pause_messaging_signal(pause=True)
 
         # TODO: 5. Mandar data a nuevo server
-
-        # TODO: 6. Esperar ok de nuevo server y cambiar flag de server
-
-        # TODO: 7. Mandar mensaje de reconexion
-
-        # Una vez que el nuevo server responda con su inicializacion del server:
         vector_clock_inits = self.server.clock.dump()
         messages = self.server.messages
-        # Elegir nuevo servidor y comunicar migración
-        selected_server = False
-        while not selected_server:
-            new_addr = request_random_server(
-                self.dns_host, self.dns_port, self.migration_server.server_uri
-            )
-            if new_addr is None:
-                self.server.send_pause_messaging_signal(pause=False)
-                return False
-
-            logger.debug(f"Selected new server {new_addr}")
-            selected_server = self.migration_server.request_migration_connection(
-                new_addr
-            )
-
-        # Mandar vector clock
-        # Mandar lista de usuario
-        self.migration_server.request_migration(
-            vector_clock_inits, messages, self._on_migrate_complete
+        self.request_migration(
+            vector_clock_inits,
+            messages,
+            self._on_migrate_complete,
+            new_addr
         )
 
-    def _on_migrate_complete(self):
+        # Una vez que el nuevo server responda con su inicializacion del server:
+
+    def request_migration_connection(self, addr: str):
+        try:
+            self.client = socketio.Client()
+            self.client.connect(addr,auth={
+                "migration": True,
+            })
+            return self.client.connected
+        except Exception as e:
+            logger.error(e)
+            return False
+
+    def request_migration(self, vector_clock_inits, messages, callback: Callable, addr):
+        # vector = pkl.dumps(vector_clock_inits)
+        messages = messages
+        print(vector_clock_inits)
+        data = (vector_clock_inits, messages)
+
+        def on_ack():
+            self.client.disconnect()
+            self.client = None
+            callback(addr)
+
+        self.client.emit("migrate", data, callback=on_ack)
+
+    def _on_migrate_complete(self, addr):
         # Una vez que se haya migrado los datos:
         # Comunicar para que se reconecten
         logger.debug("Sending reconnection signals")
-        self.server.send_reconnect_signal()
-
-        # Migracion debe finalizar terminando el server
-        logger.debug("Terminating server")
-        self.server.stop()
+        change_server_addr(self.dns_host, self.dns_port, self.server_uri, addr, self.server.send_reconnect_signal)
         return True
 
     def _start_server_cycle(
@@ -113,9 +116,6 @@ class MigrationManager:
             f"http://{self.ip}:{self.port}",
         )
 
-        if not start_as_server:
-            return
-
         self.server_th = Thread(
             target=self._start_server, args=[vectorClock, messages], daemon=True
         )
@@ -123,6 +123,17 @@ class MigrationManager:
         logger.debug("Starting server")
         self.server_th.start()
 
+        self.cycle_th = Thread(target=self._server_cycle, daemon=True)
+        if start_as_server:
+            self.cycle_th.start()
+
+    def start(self, start_as_server=False):
+        self._start_server_cycle(start_as_server=start_as_server)
+
+    def _server_cycle(self):
+        """
+        Metodo para correr el ciclo en un nuevo servidor
+        """
         while True:
             logger.debug("Waiting for cycle to end (30s)")
             # 30 segundos para migrar
@@ -136,6 +147,3 @@ class MigrationManager:
                 break
             else:
                 logger.debug("Migration failed, repeating cycle")
-
-    def start(self, start_as_server=False):
-        self._start_server_cycle(start_as_server=start_as_server)

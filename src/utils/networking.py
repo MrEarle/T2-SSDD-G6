@@ -58,9 +58,35 @@ def send_server_addr(
             pass
         sleep(0.1)
 
+def change_server_addr(
+    dns_host: str, dns_port: int, server_uri: str, server_addr: str, callback
+) -> str:
+    msg = pickle.dumps(
+        {"name": "set_current_server", "addr": server_addr, "uri": server_uri}
+    )
+
+    s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    s.connect((dns_host, dns_port))
+
+    s.sendall(msg)
+
+    while True:
+        try:
+            response = s.recv(2048)
+            response: dict = pickle.loads(response)
+
+            if response["name"] == "set_current_server_response":
+                s.close()
+                break
+        except ConnectionResetError:
+            pass
+        sleep(0.1)
+
+    callback() 
+
 
 def request_random_server(dns_host: str, dns_port: int, self_uri: str) -> str:
-    msg = pickle.dumps({"name": "get_random_server", "self_uri": self_uri})
+    msg = pickle.dumps({"name": "get_random_server", "uri": self_uri})
     logger.debug(f"Connecting to DNS at {dns_host}:{dns_port}")
 
     s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)

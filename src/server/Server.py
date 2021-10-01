@@ -1,6 +1,7 @@
 import logging
+import pickle as pkl
 from threading import Thread
-from typing import Tuple, TypedDict
+from typing import Any, List, Tuple, TypedDict
 
 import socketio
 from colorama import Fore as Color
@@ -17,13 +18,14 @@ authType = TypedDict("Auth", {"username": str, "publicUri": str})
 class Server:
     def __init__(
         self,
+        migration_manager,
         host: str,
         port: int = 3000,
         min_user_count: int = 0,
     ) -> None:
         self.server = socketio.Server(cors_allowed_origins="*")
         self.app = socketio.WSGIApp(self.server)
-
+        self.migration_manager = migration_manager
         self.port = port
         self.host = host
 
@@ -43,14 +45,16 @@ class Server:
 
         self.setup_handlers()
 
-        self.clock = VectorClock("server", self.__on_deliver_message)
+        self.clock: VectorClock = VectorClock("server", self.__on_deliver_message)
 
     def setup_handlers(self):
         self.server.on("connect", self.on_connect)
         self.server.on("disconnect", self.on_disconnect)
         self.server.on("chat", self.on_chat)
         self.server.on("addr_request", self.addr_request)
+        self.server.on("migrate", self.on_migrate)
         self.server.on("*", self.catch_all)
+
 
     def serve(self):
         # TODO: Registrarse en el DNS
@@ -72,13 +76,16 @@ class Server:
             auth: { username: str, publicId: str }
         """
         # Manejar conexion de migracion
-        self.on_connect_migration(sid, auth)
+        if "migration" in auth:
+            self.on_connect_migration(sid, auth)
 
         # Manejar conexion de cliente
-        self.on_connect_client(sid, auth)
+        else:
+            self.on_connect_client(sid, auth)
 
     def on_connect_migration(self, sid: str, auth: authType):
         # TODO: Si en auth hay un flag de migracion, hacer logica de migracion
+        print(auth)
         pass
 
     def on_connect_client(self, sid: str, auth: authType):
@@ -117,6 +124,18 @@ class Server:
                 self.history_sent = True
 
         logger.debug(f"{user.name} connected with sid {user.sid}")
+
+    def on_migrate(self, sid: str, vector_clock_inits, messages):
+        print()
+        print('vector clock', vector_clock_inits)
+        print()
+        #vector_clock_inits = pkl.loads(vector_clock_inits)
+
+        #self.clock = self.clock.load_from(vector_clock_inits[0], vector_clock_inits[1])
+        self.clock = self.clock.load_from(vector_clock_inits[0], vector_clock_inits[1])
+        self.messages = messages
+        self.cycle_th = Thread(target=self.migration_manager._server_cycle, daemon=True)
+        self.cycle_th.start()
 
     def catch_all(self, event, sid, data):
         logger.warning(f"Catchall {event} from {sid} with data {data}")
