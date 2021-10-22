@@ -1,5 +1,5 @@
 from argparse import ArgumentParser
-from time import sleep
+import socket
 from src.client.client_socket import ClientSockets
 from src.server.MigrationManager import MigrationManager
 from threading import Thread
@@ -11,7 +11,7 @@ parser = ArgumentParser()
 
 parser.add_argument(
     "--dns_ip",
-    default="localhost",
+    default=socket.gethostbyname(socket.gethostname()),
     help="Domain name server ip",
     type=str,
 )
@@ -43,9 +43,7 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     # Server en otro thread
-    server = MigrationManager(
-        args.dns_ip, args.dns_port, args.server_uri, args.min_n
-    )
+    server = MigrationManager(args.dns_ip, args.dns_port, args.server_uri, args.min_n)
     server_th = Thread(target=server.start, args=[args.start_as_server])
     server_th.start()
 

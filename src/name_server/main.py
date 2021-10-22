@@ -1,4 +1,3 @@
-
 """Implementation of a simple Name Server with SSP (stub, scion pairs)
 Chains, this is a simple solution for locating entities that is mainly
 applicable to local-area networks.
@@ -7,22 +6,19 @@ applicable to local-area networks.
 
 
 """
-from collections import defaultdict
 import logging
 import pickle as pkl
 from datetime import datetime
 import socket
 from threading import Thread
-import re
 from random import choice
 
 from colorama.ansi import Fore
-from ..utils.networking import get_public_ip
+
+from src.name_server.ip_lookup import find_closest_ip
 
 logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(f"{Fore.GREEN}[DNS]{Fore.RESET}")
-
-MIGRATION_REGEX = r"^migration@.+:\d+$"
 
 
 def ctime():
@@ -32,7 +28,7 @@ def ctime():
 
 
 class NameServer:
-    def __init__(self, host="localhost", port=8000, n=10):
+    def __init__(self, port=8000, n=10):
         """Initializes a name server with forwarding pointers of the form
         (stub, scion) for clients stubs and server stubs.
 
@@ -45,27 +41,21 @@ class NameServer:
 
         Parameters
         ----------
-        host : int or str
-            Machine on which the server will be running
         port : int
             Port on which the server will be listening for requests
         n : int
             Maximum number of processes to listen
-        uris : set
-            Conjunto de URIs de los server's latentes de los clientes
-        current_uri : str
-            URI actual del server de la aplicación
         """
-        self.host = host
+        self.host = socket.gethostbyname(socket.gethostname())
         self.port = port
         self.n = n
 
-        self.addresses = set() # set(http://ip:port)
-        self.uri2address = dict() # uri -> current address
+        self.addresses = set()  # set(http://ip:port)
+        self.uri2address = dict()  # uri -> [address1, address2, ...]
 
         # initialize NS
         self.s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        self.s.bind(("localhost", self.port))
+        self.s.bind((self.host, self.port))
         self.s.listen(n)
 
         logger.debug(
@@ -74,27 +64,8 @@ class NameServer:
         )
 
     def run(self):
-        """Runs the Name Server.
+        """Runs the Name Server"""
 
-        Incoming requests must come with the following structure:
-
-        If the server is updating it's address:
-        {
-            'name': 'update_server',
-            'addr': <server address>
-        }
-
-        If the client is requesting an address:
-
-        {
-            'name': 'addr_request',
-            'uri': <uri>
-        }
-
-        if 'name' is 'server', then the message must come with a 'host' key
-        with the new host location.
-        if 'name' is 'client', the last locato
-        """
         logger.debug(f"[{ctime()}] Accepting connections")
         while True:
             logger.debug(f"[{ctime()}] Waiting for next connection")
@@ -104,6 +75,16 @@ class NameServer:
                 client_th.start()
 
     def accept_connection(self, conn: socket.socket, addr):
+        """Manages a connection
+
+        Incoming requests must come with the following structure:
+
+        {
+            name: The type of request
+            ...other_data: Data relevant to the request type
+        }
+        """
+
         logger.debug(
             f"[{ctime()}] Accepted connection from " f"IP: {addr[0]}, PORT: {addr[1]}"
         )
@@ -112,10 +93,8 @@ class NameServer:
             try:
                 data = conn.recv(1024)
                 req = pkl.loads(data)
-                print()
-                print(req)
-                print()
-                if req["name"] == "update_server": # nuevo proceso latente
+
+                if req["name"] == "update_server":  # nuevo proceso latente
                     self.register_address(req["uri"], req["addr"])
                     msj = {
                         "name": "update_server_response",
@@ -123,14 +102,13 @@ class NameServer:
                     }
                     conn.send(pkl.dumps(msj))
                     logger.debug(
-                        f"[{ctime()}] Added new server location:"
-                        f" {req['addr']}"
+                        f"[{ctime()}] Added new server location:" f" {req['addr']}"
                     )
                 elif req["name"] == "addr_request":
                     msj = {
                         "name": "addr_response",
                         "req_uri": req["uri"],
-                        "addr": self.uri2address.get(req['uri']),
+                        "addr": self.get_closest_server(addr[0], req["uri"]),
                     }
                     conn.send(pkl.dumps(msj))
                     logger.debug(
@@ -139,7 +117,7 @@ class NameServer:
                 elif req["name"] == "get_random_server":
                     msj = {
                         "name": "random_server_response",
-                        "addr": self.get_random_server(req['uri']),
+                        "addr": self.get_random_server(req["uri"]),
                     }
                     conn.send(pkl.dumps(msj))
                 elif req["name"] == "set_current_server":
@@ -164,7 +142,11 @@ class NameServer:
 
         conn.close()
 
-    def register_address(self, uri, address):
+    def get_closest_server(self, ip: str, uri: str) -> str:
+        servers = self.uri2address.get(uri)
+        return find_closest_ip(ip, servers)
+
+    def register_address(self, uri: str, address: str):
         """Receives a new host:port from the server host and update the list
         of known URIs.
 
@@ -176,16 +158,17 @@ class NameServer:
         self.addresses.add(address)
 
         if not self.uri2address.get(uri):
-            self.uri2address[uri] = address
+            self.uri2address[uri] = [address]
 
     def set_current_host(self, uri: str, address: str):
-        self.uri2address[uri] = address
-        logger.debug(f'Set current host addr: {address}')
+        self.uri2address[uri] = [address]
+        logger.debug(f"Set current host addr: {address}")
 
     def get_random_server(self, uri: str):
         servers = [
-            addr for addr in self.addresses
-            if (addr and addr != self.uri2address[uri])
+            addr
+            for addr in self.addresses
+            if (addr and addr not in self.uri2address[uri])
         ]
 
         if len(servers) == 0:
@@ -195,14 +178,12 @@ class NameServer:
 
 
 def serve():
-    HOST = 'localhost'
     PORT = 8000
     n = 10
-    ns = NameServer(HOST, PORT, n)
+    ns = NameServer(PORT, n)
 
     ns.run()
 
 
 if __name__ == "__main__":
     serve()
-
