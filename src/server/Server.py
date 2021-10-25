@@ -45,7 +45,7 @@ class Server:
 
         self.setup_handlers()
 
-        self.clock: VectorClock = VectorClock("server", self.__on_deliver_message)
+        self.clock: VectorClock = VectorClock("server", self._on_deliver_message)
 
     def setup_handlers(self):
         self.server.on("connect", self.on_connect)
@@ -54,7 +54,6 @@ class Server:
         self.server.on("addr_request", self.addr_request)
         self.server.on("migrate", self.on_migrate)
         self.server.on("*", self.catch_all)
-
 
     def serve(self):
         # TODO: Registrarse en el DNS
@@ -128,7 +127,7 @@ class Server:
 
     def on_migrate(self, _, vector_clock_inits, messages, history_sent):
         logger.debug("Starting on_migrate endpoint")
-        #self.clock = self.clock.load_from(vector_clock_inits[0], vector_clock_inits[1])
+        # self.clock = self.clock.load_from(vector_clock_inits[0], vector_clock_inits[1])
         self.clock = self.clock.load_from(vector_clock_inits[0], vector_clock_inits[1])
         self.messages = messages
         self.__migrating = False
@@ -145,7 +144,7 @@ class Server:
         if client:
             logger.debug(f"User disconnected: {client.name}")
 
-                # Notificar al resto que el usuario se desconecto
+            # Notificar al resto que el usuario se desconecto
             self.server.emit(
                 "server_message",
                 {"message": f"\u274C {client.name} has disconnected from the server"},
@@ -160,7 +159,7 @@ class Server:
         self.clock.receive_message(data)
         return True
 
-    def __on_deliver_message(self, message: dict):
+    def _on_deliver_message(self, message: dict):
         uuid: str = message[SENDER_ID]
         logger.debug(f"Delivering message {message}")
         client = self.users.get_user_by_uuid(uuid)
@@ -206,5 +205,5 @@ class Server:
         return None, None
 
     def cleanup(self):
-        self.clock = VectorClock("server", self.__on_deliver_message)
+        self.clock = VectorClock("server", self._on_deliver_message)
         self.messages = []

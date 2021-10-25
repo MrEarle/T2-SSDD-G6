@@ -19,6 +19,7 @@ def find_closest_ip(self_ip: str, ips: Union[List[str], Set[str]]) -> str:
     Returns:
         An IP address which has the largest matching sub network of self_ip
     """
+    # Clean ips (remove https y :port)
     clean_self_ip = clean_ip(self_ip)
     clean_ips = list(map(clean_ip, ips))
 
