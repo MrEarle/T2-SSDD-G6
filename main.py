@@ -35,16 +35,13 @@ parser.add_argument(
     help="Minimum number of clients before starting the connection.",
     type=int,
 )
-parser.add_argument(
-    "-s", "--start_as_server", action="store_true", help="Start this as acting server"
-)
 
 if __name__ == "__main__":
     args = parser.parse_args()
 
     # Server en otro thread
     server = MigrationManager(args.dns_ip, args.dns_port, args.server_uri, args.min_n)
-    server_th = Thread(target=server.start, args=[args.start_as_server])
+    server_th = Thread(target=server.start)
     server_th.start()
 
     # Cliente en thread principal

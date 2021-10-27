@@ -42,18 +42,16 @@ class MigrationManager:
         selected_server = False
         new_addr = None
         while not selected_server or new_addr == None:
-            new_addr = request_random_server(
-                self.dns_host, self.dns_port, self.server_uri
-            )
+            new_addr = request_random_server(self.dns_host, self.dns_port, self.server_uri)
             print(new_addr, "_migrate")
 
-            if not new_addr: return False
+            if not new_addr:
+                return False
 
             # TODO: 2. Conectar y notificar migracion
             logger.debug(f"Selected new server {new_addr}")
             # TODO: Implementar bien esta funcion + OK
             selected_server = self.request_migration_connection(new_addr)
-
 
         # TODO: 4. Pausar clientes
         # Avisar a clientes que paren de mandar mensajes
@@ -62,12 +60,7 @@ class MigrationManager:
         # TODO: 5. Mandar data a nuevo server
         vector_clock_inits = self.server.clock.dump()
         messages = self.server.messages
-        self.request_migration(
-            vector_clock_inits,
-            messages,
-            self._on_migrate_complete,
-            new_addr
-        )
+        self.request_migration(vector_clock_inits, messages, self._on_migrate_complete, new_addr)
         return True
 
         # Una vez que el nuevo server responda con su inicializacion del server:
@@ -75,9 +68,12 @@ class MigrationManager:
     def request_migration_connection(self, addr: str):
         try:
             self.client = socketio.Client()
-            self.client.connect(addr,auth={
-                "migration": True,
-            })
+            self.client.connect(
+                addr,
+                auth={
+                    "migration": True,
+                },
+            )
             return self.client.connected
         except Exception as e:
             logger.error(e)
@@ -86,7 +82,7 @@ class MigrationManager:
     def request_migration(self, vector_clock_inits, messages, callback: Callable, addr):
         # vector = pkl.dumps(vector_clock_inits)
         messages = messages
-        data = (vector_clock_inits, messages, self.server.history_sent)
+        data = (vector_clock_inits, messages, self.server.min_user_count, self.server.history_sent)
 
         def on_ack():
             self.client.disconnect()
@@ -103,32 +99,28 @@ class MigrationManager:
         change_server_addr(self.dns_host, self.dns_port, self.server_uri, addr, self.server.send_reconnect_signal)
         return True
 
-    def _start_server_cycle(
-        self, start_as_server=False, vectorClock=None, messages=None
-    ):
+    def _start_server_cycle(self, vectorClock=None, messages=None):
         logger.debug("Starting server cycle")
         # Iniciar el servidor en otro thread
         self.ip, self.port = get_public_ip()
-        send_server_addr(
+        _, is_active_server = send_server_addr(
             self.dns_host,
             self.dns_port,
             self.server_uri,
             f"http://{self.ip}:{self.port}",
         )
 
-        self.server_th = Thread(
-            target=self._start_server, args=[vectorClock, messages], daemon=True
-        )
+        self.server_th = Thread(target=self._start_server, args=[vectorClock, messages], daemon=True)
 
         logger.debug("Starting server")
         self.server_th.start()
 
         self.cycle_th = Thread(target=self._server_cycle, daemon=True)
-        if start_as_server:
+        if is_active_server:
             self.cycle_th.start()
 
-    def start(self, start_as_server=False):
-        self._start_server_cycle(start_as_server=start_as_server)
+    def start(self):
+        self._start_server_cycle()
 
     def _server_cycle(self):
         """

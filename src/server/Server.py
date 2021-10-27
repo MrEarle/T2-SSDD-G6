@@ -58,9 +58,7 @@ class Server:
     def serve(self):
         # TODO: Registrarse en el DNS
         logger.debug(f"Running App on http://{self.host}:{self.port}")
-        self.__created_server_th = Thread(
-            target=self.__created_server.serve_forever, daemon=True
-        )
+        self.__created_server_th = Thread(target=self.__created_server.serve_forever, daemon=True)
         self.__created_server_th.start()
 
     def stop(self):
@@ -125,13 +123,14 @@ class Server:
 
         logger.debug(f"{user.name} connected with sid {user.sid}")
 
-    def on_migrate(self, _, vector_clock_inits, messages, history_sent):
+    def on_migrate(self, _, vector_clock_inits, messages, min_user_count, history_sent):
         logger.debug("Starting on_migrate endpoint")
         # self.clock = self.clock.load_from(vector_clock_inits[0], vector_clock_inits[1])
         self.clock = self.clock.load_from(vector_clock_inits[0], vector_clock_inits[1])
         self.messages = messages
         self.__migrating = False
         self.history_sent = history_sent
+        self.min_user_count = min_user_count
         self.cycle_th = Thread(target=self.migration_manager._server_cycle, daemon=True)
         self.cycle_th.start()
 
