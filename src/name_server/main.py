@@ -15,7 +15,8 @@ from random import choice
 
 from colorama.ansi import Fore
 
-from src.name_server.ip_lookup import find_closest_ip
+from .ip_lookup import find_closest_ip
+from .rw_lock import get_rwlock
 
 logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(f"{Fore.GREEN}[DNS]{Fore.RESET}")
@@ -49,6 +50,8 @@ class NameServer:
         self.host = socket.gethostbyname(socket.gethostname())
         self.port = port
         self.n = n
+
+        self.server_reader, self.server_writer = get_rwlock()
 
         self.addresses = set()  # set(http://ip:port)
         self.uri2address = dict()  # uri -> [address1, address2, ...]
@@ -129,8 +132,9 @@ class NameServer:
         conn.close()
 
     def get_closest_server(self, ip: str, uri: str) -> str:
-        servers = self.uri2address.get(uri)
-        return find_closest_ip(ip, servers)
+        with self.server_reader:
+            servers = self.uri2address.get(uri)
+            return find_closest_ip(ip, servers)
 
     def register_address(self, uri: str, address: str) -> bool:
         """Receives a new host:port from the server host and update the list
@@ -147,22 +151,31 @@ class NameServer:
         """
         self.addresses.add(address)
 
-        if not self.uri2address.get(uri):
-            self.uri2address[uri] = [address]
-            return True
-        return False
+        is_active_server = False
+
+        with self.server_writer:
+            if not self.uri2address.get(uri):
+                self.uri2address[uri] = []
+
+            if len(self.uri2address[uri]) < 2:
+                self.uri2address[uri].append(address)
+                is_active_server = True
+
+        return is_active_server
 
     def set_current_host(self, uri: str, address: str):
-        self.uri2address[uri] = [address]
+        with self.server_writer:
+            self.uri2address[uri] = [address]
         logger.debug(f"Set current host addr: {address}")
 
     def get_random_server(self, uri: str):
-        servers = [addr for addr in self.addresses if (addr and addr not in self.uri2address[uri])]
+        with self.server_reader:
+            servers = [addr for addr in self.addresses if (addr and addr not in self.uri2address[uri])]
 
-        if len(servers) == 0:
-            return None
+            if len(servers) == 0:
+                return None
 
-        return choice(servers)
+            return choice(servers)
 
 
 def serve():
