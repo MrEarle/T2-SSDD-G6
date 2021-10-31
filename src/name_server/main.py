@@ -58,10 +58,7 @@ class NameServer:
         self.s.bind((self.host, self.port))
         self.s.listen(n)
 
-        logger.debug(
-            f"[{ctime()}] Name Server up and running on"
-            f" IP: {self.host}, PORT: {self.port}"
-        )
+        logger.debug(f"[{ctime()}] Name Server up and running on" f" IP: {self.host}, PORT: {self.port}")
 
     def run(self):
         """Runs the Name Server"""
@@ -85,9 +82,7 @@ class NameServer:
         }
         """
 
-        logger.debug(
-            f"[{ctime()}] Accepted connection from " f"IP: {addr[0]}, PORT: {addr[1]}"
-        )
+        logger.debug(f"[{ctime()}] Accepted connection from " f"IP: {addr[0]}, PORT: {addr[1]}")
 
         while True:
             try:
@@ -95,15 +90,10 @@ class NameServer:
                 req = pkl.loads(data)
 
                 if req["name"] == "update_server":  # nuevo proceso latente
-                    self.register_address(req["uri"], req["addr"])
-                    msj = {
-                        "name": "update_server_response",
-                        "addr": req["addr"],
-                    }
+                    active_server = self.register_address(req["uri"], req["addr"])
+                    msj = {"name": "update_server_response", "addr": req["addr"], "active_server": active_server}
                     conn.send(pkl.dumps(msj))
-                    logger.debug(
-                        f"[{ctime()}] Added new server location:" f" {req['addr']}"
-                    )
+                    logger.debug(f"[{ctime()}] Added new server location:" f" {req['addr']}")
                 elif req["name"] == "addr_request":
                     msj = {
                         "name": "addr_response",
@@ -111,9 +101,7 @@ class NameServer:
                         "addr": self.get_closest_server(addr[0], req["uri"]),
                     }
                     conn.send(pkl.dumps(msj))
-                    logger.debug(
-                        f"[{ctime()}] Last known location sent to client: {req['uri']} -> {msj['addr']}"
-                    )
+                    logger.debug(f"[{ctime()}] Last known location sent to client: {req['uri']} -> {msj['addr']}")
                 elif req["name"] == "get_random_server":
                     msj = {
                         "name": "random_server_response",
@@ -136,9 +124,7 @@ class NameServer:
                 break
             except pkl.UnpicklingError as e:
                 logger.debug(e)
-        logger.debug(
-            f"[{ctime()}] Closing connection from " f"IP: {addr[0]}, PORT: {addr[1]}"
-        )
+        logger.debug(f"[{ctime()}] Closing connection from " f"IP: {addr[0]}, PORT: {addr[1]}")
 
         conn.close()
 
@@ -146,7 +132,7 @@ class NameServer:
         servers = self.uri2address.get(uri)
         return find_closest_ip(ip, servers)
 
-    def register_address(self, uri: str, address: str):
+    def register_address(self, uri: str, address: str) -> bool:
         """Receives a new host:port from the server host and update the list
         of known URIs.
 
@@ -154,22 +140,24 @@ class NameServer:
         ----------
         uri : str
         adress : str
+
+        Returns
+        ----------
+        Bool -> True if set as active server
         """
         self.addresses.add(address)
 
         if not self.uri2address.get(uri):
             self.uri2address[uri] = [address]
+            return True
+        return False
 
     def set_current_host(self, uri: str, address: str):
         self.uri2address[uri] = [address]
         logger.debug(f"Set current host addr: {address}")
 
     def get_random_server(self, uri: str):
-        servers = [
-            addr
-            for addr in self.addresses
-            if (addr and addr not in self.uri2address[uri])
-        ]
+        servers = [addr for addr in self.addresses if (addr and addr not in self.uri2address[uri])]
 
         if len(servers) == 0:
             return None
