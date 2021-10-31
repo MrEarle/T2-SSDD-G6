@@ -97,6 +97,7 @@ class NameServer:
                     msj = {"name": "update_server_response", "addr": req["addr"], "active_server": active_server}
                     conn.send(pkl.dumps(msj))
                     logger.debug(f"[{ctime()}] Added new server location:" f" {req['addr']}")
+
                 elif req["name"] == "addr_request":
                     msj = {
                         "name": "addr_response",
@@ -105,25 +106,24 @@ class NameServer:
                     }
                     conn.send(pkl.dumps(msj))
                     logger.debug(f"[{ctime()}] Last known location sent to client: {req['uri']} -> {msj['addr']}")
+
                 elif req["name"] == "get_random_server":
                     msj = {
                         "name": "random_server_response",
                         "addr": self.get_random_server(req["uri"]),
                     }
                     conn.send(pkl.dumps(msj))
+
                 elif req["name"] == "set_current_server":
-                    self.set_current_host(req["uri"], req["addr"])
-                    msj = {
-                        "name": "set_current_server_response",
-                    }
+                    self.set_current_host(req["uri"], req["addr"], req["self_addr"])
+                    msj = {"name": "set_current_server_response"}
                     conn.send(pkl.dumps(msj))
+
                 else:
-                    # TODO: send empty message to sender
                     logger.debug(f"[{ctime()}] Message didnt match")
-                    msj = {
-                        "name": "empty",
-                    }
+                    msj = {"name": "empty"}
                     conn.send(pkl.dumps(msj))
+
                 break
             except pkl.UnpicklingError as e:
                 logger.debug(e)
@@ -163,10 +163,16 @@ class NameServer:
 
         return is_active_server
 
-    def set_current_host(self, uri: str, address: str):
+    def set_current_host(self, uri: str, address: str, old_address: str):
         with self.server_writer:
-            self.uri2address[uri] = [address]
-        logger.debug(f"Set current host addr: {address}")
+            try:
+                i = self.uri2address[uri].index(old_address)
+                self.uri2address[uri][i] = address
+                logger.debug(f"Set current host addr: {address}")
+            except ValueError as e:
+                logger.error(
+                    f"Trying to update address from {old_address} to {address}, but there's no {old_address} in the registry."
+                )
 
     def get_random_server(self, uri: str):
         with self.server_reader:

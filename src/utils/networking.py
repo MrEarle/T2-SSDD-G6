@@ -52,8 +52,10 @@ def send_server_addr(dns_host: str, dns_port: int, server_uri: str, server_addr:
         sleep(0.1)
 
 
-def change_server_addr(dns_host: str, dns_port: int, server_uri: str, server_addr: str, callback) -> str:
-    msg = pickle.dumps({"name": "set_current_server", "addr": server_addr, "uri": server_uri})
+def change_server_addr(
+    dns_host: str, dns_port: int, server_uri: str, server_addr: str, self_addr: str, callback
+) -> str:
+    msg = pickle.dumps({"name": "set_current_server", "addr": server_addr, "uri": server_uri, "self_addr": self_addr})
 
     s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     s.connect((dns_host, dns_port))

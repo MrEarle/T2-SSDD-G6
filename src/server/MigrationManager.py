@@ -96,18 +96,26 @@ class MigrationManager:
         # Una vez que se haya migrado los datos:
         # Comunicar para que se reconecten
         logger.debug("Sending reconnection signals")
-        change_server_addr(self.dns_host, self.dns_port, self.server_uri, addr, self.server.send_reconnect_signal)
+        change_server_addr(
+            self.dns_host,
+            self.dns_port,
+            self.server_uri,
+            server_addr=addr,
+            self_addr=self.addr,
+            callback=self.server.send_reconnect_signal,
+        )
         return True
 
     def _start_server_cycle(self, vectorClock=None, messages=None):
         logger.debug("Starting server cycle")
         # Iniciar el servidor en otro thread
         self.ip, self.port = get_public_ip()
+        self.addr = f"http://{self.ip}:{self.port}"
         _, is_active_server = send_server_addr(
             self.dns_host,
             self.dns_port,
             self.server_uri,
-            f"http://{self.ip}:{self.port}",
+            self.addr,
         )
 
         self.server_th = Thread(target=self._start_server, args=[vectorClock, messages], daemon=True)

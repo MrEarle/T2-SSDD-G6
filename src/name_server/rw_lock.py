@@ -52,6 +52,6 @@ class Writer:
         self.rwlock.exit_write()
 
 
-def get_rwlock() -> Tuple(Reader, Writer):
+def get_rwlock() -> Tuple[Reader, Writer]:
     rwlock = RWLock()
     return Reader(rwlock), Writer(rwlock)
