@@ -1,11 +1,13 @@
 import logging
 import pickle as pkl
 from threading import Thread
-from typing import Any, List, Tuple, TypedDict
+from typing import TypedDict
 
 import socketio
 from colorama import Fore as Color
 from werkzeug.serving import make_server
+
+from .ServerCoordinator import ServerCoordinator
 
 from ..utils.vectorClock import MESSAGE, SENDER_ID, VectorClock
 
@@ -41,11 +43,14 @@ class Server:
         self.users = UserList()
         self.history_sent = False
         self.min_user_count = min_user_count
-        self.messages = []
+        self.messages = {}
+
+        self.server_coord = ServerCoordinator(self.server, self)
+        self.next_index = 0
 
         self.setup_handlers()
 
-        self.clock: VectorClock = VectorClock("server", self._on_deliver_message)
+        self.clock: VectorClock = VectorClock("server", self._on_clock_deliver_message)
 
     def setup_handlers(self):
         self.server.on("connect", self.on_connect)
@@ -113,12 +118,12 @@ class Server:
                 # Solo al cliente conectado si ya se mando a todos
                 self.server.emit(
                     "message_history",
-                    {"messages": self.messages},
+                    {"messages": [x for x in sorted(self.messages.items())]},
                     room=sid,
                 )
             else:
                 # A todos si todavia no se hace
-                self.server.emit("message_history", {"messages": self.messages})
+                self.server.emit("message_history", {"messages": [x for x in sorted(self.messages.items())]})
                 self.history_sent = True
 
         logger.debug(f"{user.name} connected with sid {user.sid}")
@@ -158,13 +163,13 @@ class Server:
         self.clock.receive_message(data)
         return True
 
-    def _on_deliver_message(self, message: dict):
+    def _on_deliver_message(self, message: dict, message_index: int):
         uuid: str = message[SENDER_ID]
         logger.debug(f"Delivering message {message}")
         client = self.users.get_user_by_uuid(uuid)
 
         # Agregar mensaje al registro
-        self.messages.append({"username": client.name, "message": message[MESSAGE]})
+        self.messages[message_index] = {"username": client.name, "message": message[MESSAGE]}
 
         # Enviar mensaje solo si se supero el limite inferior
         if client and (len(self.users) >= self.min_user_count or self.history_sent):
@@ -172,9 +177,13 @@ class Server:
                 try:
                     msg = self.clock.send_message(message[MESSAGE], dest_uuid)
                     msg["username"] = client.name
+                    msg["index"] = message_index
                     self.server.emit("chat", msg, to=user.sid)
                 except Exception as e:
                     logger.error(e)
+
+    def _on_clock_deliver_message(self, message: dict):
+        self.server_coord.request_next_index(message)
 
     def send_pause_messaging_signal(self, pause=True):
         self.__migrating = pause
@@ -204,5 +213,5 @@ class Server:
         return None, None
 
     def cleanup(self):
-        self.clock = VectorClock("server", self._on_deliver_message)
-        self.messages = []
+        self.clock = VectorClock("server", self._on_clock_deliver_message)
+        self.messages = {}
