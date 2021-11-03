@@ -51,7 +51,8 @@ class ServerCoordinator:
                     self.coordinator_client = client
                     return
             except Exception:
-                sleep(0.1)
+                pass
+            sleep(0.1)
 
     def on_disconnect(self):
         self.coordinator_client = None
