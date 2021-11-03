@@ -7,7 +7,7 @@ from typing import Callable
 import socketio
 from colorama import Fore as Color
 from .Server import Server
-from ..utils.networking import get_public_ip, request_random_server, send_server_addr, change_server_addr
+from ..utils.networking import get_public_ip, request_random_server, request_replica_addr, send_server_addr, change_server_addr
 
 logger = logging.getLogger(f"{Color.MAGENTA}[MigrationManager]{Color.RESET}")
 
@@ -36,6 +36,14 @@ class MigrationManager:
             self.min_n,
         )
         self.server.serve()
+    
+    def get_replica_address(self):
+        return request_replica_addr(
+            self.dns_host,
+            self.dns_port,
+            self.addr,
+            self.server_uri,
+        )
 
     def _migrate(self):
         # TODO: 1. Request random server

@@ -31,6 +31,25 @@ def request_server_adrr(dns_host: str, dns_port: int, uri: str) -> str:
                 return response["addr"]
 
 
+def request_replica_addr(dns_host: str, dns_port: int, my_addr: str, uri: str) -> str:
+    msg = pickle.dumps({
+        "name": "get_replica_addr",
+        "my_addr": my_addr,
+        "uri": uri
+    })
+
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+        s.connect((dns_host, dns_port))
+        s.send(msg)
+
+        while True:
+            response = s.recv(2048)
+            response: dict = pickle.loads(response)
+
+            if response["name"] == "get_replica_addr_response":
+                return response["addr"]
+
+
 def send_server_addr(dns_host: str, dns_port: int, server_uri: str, server_addr: str) -> str:
     msg = pickle.dumps({"name": "update_server", "addr": server_addr, "uri": server_uri})
 

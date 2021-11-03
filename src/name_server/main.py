@@ -119,6 +119,14 @@ class NameServer:
                     msj = {"name": "set_current_server_response"}
                     conn.send(pkl.dumps(msj))
 
+                elif req["name"] == "get_replica_addr":
+                    logger.debug(f"[{ctime()}] Send replica address")
+                    msj = {
+                        "name": "get_replica_addr_response",
+                        "addr": self.get_replica_address(req["my_addr"], req["uri"])
+                    }
+                    conn.send(pkl.dumps(msj))
+
                 else:
                     logger.debug(f"[{ctime()}] Message didnt match")
                     msj = {"name": "empty"}
@@ -162,6 +170,12 @@ class NameServer:
                 is_active_server = True
 
         return is_active_server
+    
+    def get_replica_address(self, request_address: str, uri: str) -> str:
+        for address in self.uri2address[uri]:
+            if address != request_address:
+                return address
+        return ""
 
     def set_current_host(self, uri: str, address: str, old_address: str):
         with self.server_writer:
