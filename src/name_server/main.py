@@ -15,7 +15,8 @@ from random import choice
 
 from colorama.ansi import Fore
 
-from src.name_server.ip_lookup import find_closest_ip
+from .ip_lookup import find_closest_ip
+from .rw_lock import get_rwlock
 
 logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(f"{Fore.GREEN}[DNS]{Fore.RESET}")
@@ -49,6 +50,8 @@ class NameServer:
         self.host = socket.gethostbyname(socket.gethostname())
         self.port = port
         self.n = n
+
+        self.server_reader, self.server_writer = get_rwlock()
 
         self.addresses = set()  # set(http://ip:port)
         self.uri2address = dict()  # uri -> [address1, address2, ...]
@@ -94,6 +97,7 @@ class NameServer:
                     msj = {"name": "update_server_response", "addr": req["addr"], "active_server": active_server}
                     conn.send(pkl.dumps(msj))
                     logger.debug(f"[{ctime()}] Added new server location:" f" {req['addr']}")
+
                 elif req["name"] == "addr_request":
                     msj = {
                         "name": "addr_response",
@@ -102,25 +106,24 @@ class NameServer:
                     }
                     conn.send(pkl.dumps(msj))
                     logger.debug(f"[{ctime()}] Last known location sent to client: {req['uri']} -> {msj['addr']}")
+
                 elif req["name"] == "get_random_server":
                     msj = {
                         "name": "random_server_response",
                         "addr": self.get_random_server(req["uri"]),
                     }
                     conn.send(pkl.dumps(msj))
+
                 elif req["name"] == "set_current_server":
-                    self.set_current_host(req["uri"], req["addr"])
-                    msj = {
-                        "name": "set_current_server_response",
-                    }
+                    self.set_current_host(req["uri"], req["addr"], req["self_addr"])
+                    msj = {"name": "set_current_server_response"}
                     conn.send(pkl.dumps(msj))
+
                 else:
-                    # TODO: send empty message to sender
                     logger.debug(f"[{ctime()}] Message didnt match")
-                    msj = {
-                        "name": "empty",
-                    }
+                    msj = {"name": "empty"}
                     conn.send(pkl.dumps(msj))
+
                 break
             except pkl.UnpicklingError as e:
                 logger.debug(e)
@@ -129,8 +132,9 @@ class NameServer:
         conn.close()
 
     def get_closest_server(self, ip: str, uri: str) -> str:
-        servers = self.uri2address.get(uri)
-        return find_closest_ip(ip, servers)
+        with self.server_reader:
+            servers = self.uri2address.get(uri)
+            return find_closest_ip(ip, servers)
 
     def register_address(self, uri: str, address: str) -> bool:
         """Receives a new host:port from the server host and update the list
@@ -147,22 +151,37 @@ class NameServer:
         """
         self.addresses.add(address)
 
-        if not self.uri2address.get(uri):
-            self.uri2address[uri] = [address]
-            return True
-        return False
+        is_active_server = False
 
-    def set_current_host(self, uri: str, address: str):
-        self.uri2address[uri] = [address]
-        logger.debug(f"Set current host addr: {address}")
+        with self.server_writer:
+            if not self.uri2address.get(uri):
+                self.uri2address[uri] = []
+
+            if len(self.uri2address[uri]) < 2:
+                self.uri2address[uri].append(address)
+                is_active_server = True
+
+        return is_active_server
+
+    def set_current_host(self, uri: str, address: str, old_address: str):
+        with self.server_writer:
+            try:
+                i = self.uri2address[uri].index(old_address)
+                self.uri2address[uri][i] = address
+                logger.debug(f"Set current host addr: {address}")
+            except ValueError as e:
+                logger.error(
+                    f"Trying to update address from {old_address} to {address}, but there's no {old_address} in the registry."
+                )
 
     def get_random_server(self, uri: str):
-        servers = [addr for addr in self.addresses if (addr and addr not in self.uri2address[uri])]
+        with self.server_reader:
+            servers = [addr for addr in self.addresses if (addr and addr not in self.uri2address[uri])]
 
-        if len(servers) == 0:
-            return None
+            if len(servers) == 0:
+                return None
 
-        return choice(servers)
+            return choice(servers)
 
 
 def serve():
