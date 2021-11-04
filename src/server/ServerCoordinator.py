@@ -3,12 +3,13 @@ from typing import TypedDict
 from socketio import Server, Client
 from threading import Lock
 from time import sleep
+from Server import Server as ClientServer
 
 authType = TypedDict("Auth", {"username": str, "publicUri": str})
 
 
 class ServerCoordinator:
-    def __init__(self, socketio: Server, server):
+    def __init__(self, socketio: Server, server: ClientServer):
         self.socketio = socketio
         self.server = server
 
@@ -29,21 +30,29 @@ class ServerCoordinator:
     def connect(self):
         while True:
             try:
-                # 1. TODO: Pedir direccion a DNS
-                # ========BENJA LEPE=======
-                addr = ""
-                # TODO: Implementar esto en el DNS
-                # 2. TODO: Intentar conectar
-                client = Client()
-                client.connect(addr, auth={})  # Incluir en auth los headers indicando tipo de conexion
-                # ==========LEPE===========
-                # 3. TODO: Al conectar, setear los handlers
-                client.on("disconnect", self.on_disconnect)
-                # 4. TODO: Si todo funciona, terminar loop
-                self.coordinator_client = client
-                return
+                if self.coordinator_client and self.coordinator_client.connected:
+                    return
+
+                #  Pedir direccion a DNS
+                addr = self.server.migration_manager.get_replica_address()
+                if addr:
+                    # Intentar conectar
+                    client = Client()
+                    client.connect(
+                        addr,
+                        auth = {
+                            "replica_connection": True,
+                        },
+                    )
+                    
+                    # 3. TODO: Al conectar, setear los handlers
+                    client.on("disconnect", self.on_disconnect)
+                    # 4. TODO: Si todo funciona, terminar loop
+                    self.coordinator_client = client
+                    return
             except Exception:
-                sleep(0.1)
+                pass
+            sleep(0.1)
 
     def on_disconnect(self):
         self.coordinator_client = None

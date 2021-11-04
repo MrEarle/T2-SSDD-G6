@@ -12,6 +12,7 @@ from .ServerCoordinator import ServerCoordinator
 from ..utils.vectorClock import MESSAGE, SENDER_ID, VectorClock
 
 from .Users import UserList
+from MigrationManager import MigrationManager
 
 logger = logging.getLogger(f"{Color.GREEN}[Server]{Color.RESET}")
 authType = TypedDict("Auth", {"username": str, "publicUri": str})
@@ -20,7 +21,7 @@ authType = TypedDict("Auth", {"username": str, "publicUri": str})
 class Server:
     def __init__(
         self,
-        migration_manager,
+        migration_manager: MigrationManager,
         host: str,
         port: int = 3000,
         min_user_count: int = 0,
@@ -80,6 +81,10 @@ class Server:
         # Manejar conexion de migracion
         if "migration" in auth:
             self.on_connect_migration(sid, auth)
+
+        # Conexión con un servidor replicado
+        elif "replica_connection" in auth:
+            self.server_coord.on_connect_other_server(sid, auth)
 
         # Manejar conexion de cliente
         else:
