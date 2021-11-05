@@ -66,13 +66,7 @@ Una vez se han instalado las librerías necesarias, se deben seguir los siguient
 python3 dns.py
 ```
 
-2. Ejecutar el primer cliente con el flag para que sea inicializado como el primer servidor activo.
-
-```shell
-python3 main.py -s
-```
-
-3. Los clientes subsiguientes deben ser inicializados sin el flag anterior.
+2. Ejecutar los clientes, el dns se encargará de flagear a los primeros clientes como servidores.
 
 ```shell
 python3 main.py
