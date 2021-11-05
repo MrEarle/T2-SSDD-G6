@@ -3,7 +3,7 @@ import logging
 from typing import TypedDict
 from socketio import Server, Client
 from threading import Lock
-from time import sleep
+from time import sleep, time
 from colorama import Fore as Color
 
 logger = logging.getLogger(f"{Color.LIGHTMAGENTA_EX}[Coordinator]{Color.RESET}")
@@ -140,3 +140,21 @@ class ServerCoordinator:
             message = self.message_queue.pop()
             self.request_next_index(message)
             sleep(0.1)
+
+    def ask_for_client(self, dest_user):
+        data = {"result": (None, None)}
+
+        def get_callback(data):
+            def callback(uri, uuid):
+                data["result"] = (uri, uuid)
+
+            return callback
+
+        if self.coordinator_client and self.coordinator_client.connected:
+            self.coordinator_client.emit("addr_request", {"username": dest_user}, callback=get_callback(data))
+
+            timeout_time = time() + 10
+            while data["result"] == (None, None) or time() < timeout_time:
+                sleep(0.01)
+
+        return data["result"]

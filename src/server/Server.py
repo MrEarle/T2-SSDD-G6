@@ -218,7 +218,10 @@ class Server:
         dest_user = self.users.get_user_by_name(dest_username)
         if dest_user:
             return dest_user.uri, dest_user.uuid
-        return None, None
+
+        uri, uuid = self.server_coord.ask_for_client(dest_username)
+        logger.debug(f"Got user from other server: {uri}, {uuid}")
+        return uri, uuid
 
     def cleanup(self):
         self.clock = VectorClock("server", self._on_clock_deliver_message)
