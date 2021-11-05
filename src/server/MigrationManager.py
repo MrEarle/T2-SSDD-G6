@@ -7,7 +7,13 @@ from typing import Callable
 import socketio
 from colorama import Fore as Color
 from .Server import Server
-from ..utils.networking import get_public_ip, request_random_server, request_replica_addr, send_server_addr, change_server_addr
+from ..utils.networking import (
+    get_public_ip,
+    request_random_server,
+    request_replica_addr,
+    send_server_addr,
+    change_server_addr,
+)
 
 logger = logging.getLogger(f"{Color.MAGENTA}[MigrationManager]{Color.RESET}")
 
@@ -28,7 +34,7 @@ class MigrationManager:
         self.dns_port = dns_port
         self.server_uri = server_uri
 
-    def _start_server(self, vector_clock_init=None, messages=None):
+    def _start_server(self):
         self.server = Server(
             self,
             self.ip,
@@ -36,7 +42,7 @@ class MigrationManager:
             self.min_n,
         )
         self.server.serve()
-    
+
     def get_replica_address(self):
         return request_replica_addr(
             self.dns_host,
@@ -66,9 +72,8 @@ class MigrationManager:
         self.server.send_pause_messaging_signal(pause=True)
 
         # TODO: 5. Mandar data a nuevo server
-        vector_clock_inits = self.server.clock.dump()
         messages = self.server.messages
-        self.request_migration(vector_clock_inits, messages, self._on_migrate_complete, new_addr)
+        self.request_migration(messages, self._on_migrate_complete, new_addr)
         return True
 
         # Una vez que el nuevo server responda con su inicializacion del server:
@@ -87,10 +92,9 @@ class MigrationManager:
             logger.error(e)
             return False
 
-    def request_migration(self, vector_clock_inits, messages, callback: Callable, addr):
-        # vector = pkl.dumps(vector_clock_inits)
+    def request_migration(self, messages, callback: Callable, addr):
         messages = messages
-        data = (vector_clock_inits, messages, self.server.min_user_count, self.server.history_sent)
+        data = (messages, self.server.min_user_count, self.server.history_sent)
 
         def on_ack():
             self.client.disconnect()
@@ -114,7 +118,7 @@ class MigrationManager:
         )
         return True
 
-    def _start_server_cycle(self, vectorClock=None, messages=None):
+    def _start_server_cycle(self):
         logger.debug("Starting server cycle")
         # Iniciar el servidor en otro thread
         self.ip, self.port = get_public_ip()
@@ -126,7 +130,7 @@ class MigrationManager:
             self.addr,
         )
 
-        self.server_th = Thread(target=self._start_server, args=[vectorClock, messages], daemon=True)
+        self.server_th = Thread(target=self._start_server, daemon=True)
 
         logger.debug("Starting server")
         self.server_th.start()

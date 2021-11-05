@@ -9,7 +9,7 @@ from werkzeug.serving import make_server
 
 from .ServerCoordinator import ServerCoordinator
 
-from ..utils.vectorClock import MESSAGE, SENDER_ID, VectorClock
+from ..utils.vectorClock import MESSAGE
 
 from .Users import UserList
 
@@ -49,8 +49,6 @@ class Server:
         self.next_index = 0
 
         self.setup_handlers()
-
-        self.clock: VectorClock = VectorClock("server", self._on_clock_deliver_message)
 
     def setup_handlers(self):
         self.server.on("connect", self.on_connect)
@@ -133,10 +131,8 @@ class Server:
 
         logger.debug(f"{user.name} connected with sid {user.sid}")
 
-    def on_migrate(self, _, vector_clock_inits, messages, min_user_count, history_sent):
+    def on_migrate(self, _, messages, min_user_count, history_sent):
         logger.debug("Starting on_migrate endpoint")
-        # self.clock = self.clock.load_from(vector_clock_inits[0], vector_clock_inits[1])
-        self.clock = self.clock.load_from(vector_clock_inits[0], vector_clock_inits[1])
         self.messages = messages
         self.__migrating = False
         self.history_sent = history_sent
@@ -165,11 +161,10 @@ class Server:
     def on_chat(self, sid, data):
         """Maneja el broadcast de los chats"""
         # Obtener el cliente que mando el mensaje
-        uuid = data[SENDER_ID]
-        client = self.users.get_user_by_uuid(uuid)
+        client = self.users.get_user_by_sid(sid)
         data["client_name"] = client.name
 
-        self.clock.receive_message(data)
+        self.server_coord.request_next_index(data)
         return True
 
     def _on_deliver_message(self, message: dict, message_index: int):
@@ -183,15 +178,12 @@ class Server:
         if client_name and (len(self.users) >= self.min_user_count or self.history_sent):
             for dest_uuid, user in self.users.users.items():
                 try:
-                    msg = self.clock.send_message(message[MESSAGE], dest_uuid)
+                    msg = message
                     msg["username"] = client_name
                     msg["index"] = message_index
                     self.server.emit("chat", msg, to=user.sid)
                 except Exception as e:
                     logger.error(e)
-
-    def _on_clock_deliver_message(self, message: dict):
-        self.server_coord.request_next_index(message)
 
     def send_pause_messaging_signal(self, pause=True):
         self.__migrating = pause
@@ -224,5 +216,4 @@ class Server:
         return uri, uuid
 
     def cleanup(self):
-        self.clock = VectorClock("server", self._on_clock_deliver_message)
         self.messages = {}

@@ -8,14 +8,9 @@ from colorama import Fore as Color
 from werkzeug.serving import run_simple
 
 from .gui_socketio import GUI
-from ..utils.vectorClock import VectorClock
 from ..utils.networking import get_public_ip
 
 logger = logging.getLogger(f"{Color.CYAN}[P2P]{Color.RESET}")
-
-
-def dns_lookup(addr: str):
-    return "http://localhost:3001"
 
 
 class P2P:
@@ -24,7 +19,6 @@ class P2P:
         self.app = socketio.WSGIApp(self.p2p_srv)
 
         self.gui: GUI = None
-        self.clock: VectorClock = None
 
     def initialize_p2p_server(self, gui):
         self.gui = gui
@@ -32,7 +26,7 @@ class P2P:
 
     def on_p2p_connect(self, sid, environ, auth: dict):
         auth["username"] = f"{auth['username']} → {self.gui.name}"
-        self.clock.receive_message(auth)
+        self.gui.addMessage(f"<{auth['username']}> {auth['message']}")
 
     def __start(self, public_ip: str = "localhost", port: int = 3000):
         logger.debug("Starting p2p server")
@@ -47,11 +41,8 @@ class P2P:
         return public_ip, port
 
     def send_private_message(self, uri: str, from_user: str, to_user: str, to_user_id: str, message: str):
-        while self.clock is None:
-            time.sleep(0.01)
         client = socketio.Client()
-        msg = self.clock.send_message(message, to_user_id)
-        msg["username"] = from_user
+        msg = {"message": message, "username": from_user}
 
         client.connect(uri, auth=msg)
 
