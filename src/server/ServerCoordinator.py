@@ -39,6 +39,11 @@ class ServerCoordinator:
     def disconnect(self):
         self.on_disconnect()
 
+    def stop(self):
+        if self.coordinator_client:
+            self.coordinator_client.disconnect()
+        self.coordinator_client = None
+
     def _connect(self):
         while True:
             try:
@@ -142,19 +147,22 @@ class ServerCoordinator:
             sleep(0.1)
 
     def ask_for_client(self, dest_user):
-        data = {"result": (None, None)}
+        data = None
 
-        def get_callback(data):
-            def callback(uri, uuid):
-                data["result"] = (uri, uuid)
-
-            return callback
+        def callback(uri, uuid):
+            nonlocal data
+            data = (uri, uuid)
 
         if self.coordinator_client and self.coordinator_client.connected:
-            self.coordinator_client.emit("addr_request", {"username": dest_user}, callback=get_callback(data))
+            self.coordinator_client.emit(
+                "addr_request", {"username": dest_user, "src": "coordinator"}, callback=callback
+            )
 
-            timeout_time = time() + 10
-            while data["result"] == (None, None) or time() < timeout_time:
+            timeout_time = time() + 3
+            while data is None and time() < timeout_time:
                 sleep(0.01)
 
-        return data["result"]
+        if data is None:
+            data = None, None
+
+        return data

@@ -146,6 +146,11 @@ class MigrationManager:
         """
         Metodo para correr el ciclo en un nuevo servidor
         """
+        while self.server is None:
+            sleep(0.01)
+
+        self.server.server_coord.disconnect()
+
         while True:
             logger.debug("Waiting for cycle to end (30s)")
             # 30 segundos para migrar

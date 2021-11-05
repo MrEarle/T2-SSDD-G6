@@ -63,7 +63,6 @@ class Server:
         logger.debug(f"Running App on http://{self.host}:{self.port}")
         self.__created_server_th = Thread(target=self.__created_server.serve_forever, daemon=True)
         self.__created_server_th.start()
-        self.server_coord.connect()
 
     def stop(self):
         self.__created_server.shutdown()
@@ -131,7 +130,7 @@ class Server:
 
         logger.debug(f"{user.name} connected with sid {user.sid}")
 
-    def on_migrate(self, _, messages, min_user_count, history_sent):
+    def on_migrate(self, _, messages: dict, min_user_count, history_sent):
         logger.debug("Starting on_migrate endpoint")
         self.messages = messages
         self.__migrating = False
@@ -172,7 +171,7 @@ class Server:
         client_name = message["client_name"]
 
         # Agregar mensaje al registro
-        self.messages[message_index] = {"username": client_name, "message": message[MESSAGE]}
+        self.messages[int(message_index)] = {"username": client_name, "message": message[MESSAGE]}
 
         # Enviar mensaje solo si se supero el limite inferior
         if client_name and (len(self.users) >= self.min_user_count or self.history_sent):
@@ -211,9 +210,13 @@ class Server:
         if dest_user:
             return dest_user.uri, dest_user.uuid
 
-        uri, uuid = self.server_coord.ask_for_client(dest_username)
-        logger.debug(f"Got user from other server: {uri}, {uuid}")
-        return uri, uuid
+        if "src" not in data or data["src"] != "coordinator":
+            uri, uuid = self.server_coord.ask_for_client(dest_username)
+            logger.debug(f"Got user from other server: {uri}, {uuid}")
+            return uri, uuid
+
+        return None, None
 
     def cleanup(self):
         self.messages = {}
+        self.server_coord.stop()
