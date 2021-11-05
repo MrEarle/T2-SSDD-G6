@@ -11,7 +11,7 @@ import pickle as pkl
 from datetime import datetime
 import socket
 from threading import Thread
-from random import choice
+from random import choice, sample
 
 from colorama.ansi import Fore
 
@@ -123,7 +123,7 @@ class NameServer:
                     logger.debug(f"[{ctime()}] Send replica address")
                     msj = {
                         "name": "get_replica_addr_response",
-                        "addr": self.get_replica_address(req["my_addr"], req["uri"])
+                        "addr": self.get_replica_address(req["my_addr"], req["uri"]),
                     }
                     conn.send(pkl.dumps(msj))
 
@@ -142,7 +142,7 @@ class NameServer:
     def get_closest_server(self, ip: str, uri: str) -> str:
         with self.server_reader:
             servers = self.uri2address.get(uri)
-            return find_closest_ip(ip, servers)
+            return find_closest_ip(ip, sample(servers, len(servers)))
 
     def register_address(self, uri: str, address: str) -> bool:
         """Receives a new host:port from the server host and update the list
@@ -170,7 +170,7 @@ class NameServer:
                 is_active_server = True
 
         return is_active_server
-    
+
     def get_replica_address(self, request_address: str, uri: str) -> str:
         for address in self.uri2address[uri]:
             if address != request_address:

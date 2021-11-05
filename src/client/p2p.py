@@ -11,7 +11,7 @@ from .gui_socketio import GUI
 from ..utils.vectorClock import VectorClock
 from ..utils.networking import get_public_ip
 
-logger = logging.getLogger(f"{Color.CYAN}[Server]{Color.RESET}")
+logger = logging.getLogger(f"{Color.CYAN}[P2P]{Color.RESET}")
 
 
 def dns_lookup(addr: str):
@@ -46,9 +46,7 @@ class P2P:
 
         return public_ip, port
 
-    def send_private_message(
-        self, uri: str, from_user: str, to_user: str, to_user_id: str, message: str
-    ):
+    def send_private_message(self, uri: str, from_user: str, to_user: str, to_user_id: str, message: str):
         while self.clock is None:
             time.sleep(0.01)
         client = socketio.Client()
