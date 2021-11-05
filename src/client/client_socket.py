@@ -96,7 +96,7 @@ class ClientSockets:
         # Si llega  la historia de mensaje, formatearlos y agregarlos
         # a la gui
         for msg in data["messages"]:
-            self.gui.addMessage(f"<{msg['username']}> {msg['message']}")
+            self.gui.addMessage(f"<{msg[1]['username']}> {msg[1]['message']}")
 
     def __setSendNext(self, val: bool):
         # Utility function
