@@ -1,7 +1,6 @@
 # IIC2523-T2-G06
+
 IIC2523 - Sistemas Distribuidos - Pontificia Universidad Católica de Chile
-
-
 
 ## Integrantes
 
@@ -15,6 +14,7 @@ Mauro Mendoza    | msmendoza@uc.cl
 Martín Ramírez   | mramirez7@uc.cl
 
 ## Environment settings
+
 El **backend** de la aplicación fue desarrollado en Python 3.9. En primer lugar
 se recomienda crear un `venv` para almacenar las dependencias de esta parte de
 la tarea:
@@ -27,10 +27,10 @@ python3 -m virtualenv .venv
 ```
 
 Y en caso de linux si se tienen problemas con tkinter:
+
 ```shell
 sudo apt-get install python3-tk
 ```
-
 
 2. Se activa el entorno virtual:
 
@@ -47,11 +47,13 @@ Windows:
 ```
 
 3. lo actualizan
+
 ```shell
 pip3 install -U pip setuptools wheel
 ```
 
 4. y finalmente instalan las dependencias de la tarea:
+
 ```shell
 pip3 install -r requerimentes.txt
 ```
@@ -78,6 +80,21 @@ python3 main.py
 - `--server_uri` o `-u`: Especifica la URI del server. Por defecto esta es `backend.com`.
 - `--min_n` o `-n`: Mínima cantidad de clientes para que se comience el servicio de chat. Este valor debe ser incluido en todos los clientes en caso de que sea distinto de 0.
 
+# Descripción proceso tarea 3
+
+## Soporte para múltiples servidores
+
+El DNS ahora mantiene registro de hasta 2 servidores activos. Cuando un cliente pide la dirección asociada a la URI del servidor, el DNS seleccionará la dirección con la IP más cercana al cliente. Esto fue hecho según fue sugerido en el enunciado de la tarea.
+
+## Migración de Servidores
+
+El principal cambio realizado para la migración de los servidores es que, al pedirle al DNS el servidor al cual migrar, este va a elegir uno que no sea servidor activo. Al realizar el cambio, el DNS sobreescribirá la dirección del servidor que está migrando con el nuevo servidor.
+
+## Replicación
+
+Para mantener consistencia orientada al cliente, para cada mensaje, los servidores se comunican con el fin de determinar el índice a asignar para el mensaje. De esta manera, ambos servidores mantienen el orden de los mensajes de forma consistente, garantizando monotonic reads.
+
+# Descripción proceso tarea 2
 
 ## Manejo de cliente y servidor en la misma máquina
 
@@ -115,8 +132,10 @@ su registro en la tabla de direcciones, `'backend.com' -> http://HOST:PORT`,
 de manera que sea accesible por el resto de los clientes y procesos de servidor
 latentes.
 2. Una vez que transcurren los 30 segundos, el **servidor activo** (no latente) le solicita al DNS una address aleatoria de alguno de los servidores latentes. En este punto pueden ocurrir dos casos:
-> * No se encuentra ningún servidor latente disponible en el **DNS**, en cuyo caso no se realiza ninguna migración y se omiten los siguientes pasos.
-> * El **DNS** nos entrega un address valido, el cual apunta a uno de los servidores latentes. Luego se sigue con el paso **3**.
+>
+> - No se encuentra ningún servidor latente disponible en el **DNS**, en cuyo caso no se realiza ninguna migración y se omiten los siguientes pasos.
+> - El **DNS** nos entrega un address valido, el cual apunta a uno de los servidores latentes. Luego se sigue con el paso **3**.
+>
 3. En este escenario el actual server activo, se comunica con el servidor latente
 entregado, realizan un handshake y luego de eso comienza la transmisión de los
 datos, del server activo antiguo al nuevo.
