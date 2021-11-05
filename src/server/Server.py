@@ -12,7 +12,6 @@ from .ServerCoordinator import ServerCoordinator
 from ..utils.vectorClock import MESSAGE, SENDER_ID, VectorClock
 
 from .Users import UserList
-from MigrationManager import MigrationManager
 
 logger = logging.getLogger(f"{Color.GREEN}[Server]{Color.RESET}")
 authType = TypedDict("Auth", {"username": str, "publicUri": str})
@@ -21,7 +20,7 @@ authType = TypedDict("Auth", {"username": str, "publicUri": str})
 class Server:
     def __init__(
         self,
-        migration_manager: MigrationManager,
+        migration_manager,
         host: str,
         port: int = 3000,
         min_user_count: int = 0,
@@ -66,6 +65,7 @@ class Server:
         logger.debug(f"Running App on http://{self.host}:{self.port}")
         self.__created_server_th = Thread(target=self.__created_server.serve_forever, daemon=True)
         self.__created_server_th.start()
+        self.server_coord.connect()
 
     def stop(self):
         self.__created_server.shutdown()
@@ -165,23 +165,26 @@ class Server:
     def on_chat(self, sid, data):
         """Maneja el broadcast de los chats"""
         # Obtener el cliente que mando el mensaje
+        uuid = data[SENDER_ID]
+        client = self.users.get_user_by_uuid(uuid)
+        data["client_name"] = client.name
+
         self.clock.receive_message(data)
         return True
 
     def _on_deliver_message(self, message: dict, message_index: int):
-        uuid: str = message[SENDER_ID]
         logger.debug(f"Delivering message {message}")
-        client = self.users.get_user_by_uuid(uuid)
+        client_name = message["client_name"]
 
         # Agregar mensaje al registro
-        self.messages[message_index] = {"username": client.name, "message": message[MESSAGE]}
+        self.messages[message_index] = {"username": client_name, "message": message[MESSAGE]}
 
         # Enviar mensaje solo si se supero el limite inferior
-        if client and (len(self.users) >= self.min_user_count or self.history_sent):
+        if client_name and (len(self.users) >= self.min_user_count or self.history_sent):
             for dest_uuid, user in self.users.users.items():
                 try:
                     msg = self.clock.send_message(message[MESSAGE], dest_uuid)
-                    msg["username"] = client.name
+                    msg["username"] = client_name
                     msg["index"] = message_index
                     self.server.emit("chat", msg, to=user.sid)
                 except Exception as e:
