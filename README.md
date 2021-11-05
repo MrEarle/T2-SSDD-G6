@@ -26,9 +26,15 @@ crea el `venv`:
 python3 -m virtualenv .venv
 ```
 
+Y en caso de linux si se tienen problemas con tkinter:
+```shell
+sudo apt-get install python3-tk
+```
+
+
 2. Se activa el entorno virtual:
 
-Bash:
+Bash/Git Bash:
 
 ```shell
 source .venv/bin/activate
